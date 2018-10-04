@@ -4,15 +4,18 @@ import nifty.graph.rag as nrag
 import vigra
 import numpy as np
 
+from cremi.evaluation import NeuronIds
+from cremi import Volume
+
 # -----------------------
 # HELPER FUNCTIONS:
 # -----------------------
-MAX_PLOTTED_LABEL = 100000
+MAX_PLOTTED_LABEL = 1000000
 matplotlib.rcParams.update({'font.size': 5})
-rand_cm = matplotlib.colors.ListedColormap(np.random.rand(100000, 3))
+rand_cm = matplotlib.colors.ListedColormap(np.random.rand(MAX_PLOTTED_LABEL, 3))
 
 DEF_INTERP = 'none'
-segm_plot_kwargs = {'vmax': 100000, 'vmin':0}
+segm_plot_kwargs = {'vmax': MAX_PLOTTED_LABEL, 'vmin':0}
 
 def mask_the_mask(mask, value_to_mask=0., interval=None):
     if interval is not None:
@@ -123,3 +126,37 @@ def get_masked_boundary_mask(segm):
     #     bound = np.logical_or(get_boundary_mask(segm)[0, 0],get_boundary_mask(segm)[1, 0])
     bound = get_bound_mask(segm)
     return mask_the_mask(bound)
+
+
+
+def cremi_score(gt, seg, return_all_scores=False, border_threshold=None):
+    # # the zeros must be kept in the gt since they are the ignore label
+    gt = vigra.analysis.labelVolumeWithBackground(gt.astype(np.uint32))
+    # seg = vigra.analysis.labelVolume(seg.astype(np.uint32))
+
+    seg = np.array(seg)
+    seg = np.require(seg, requirements=['C'])
+    # Make sure that all labels are strictly positive:
+    seg = seg.astype('uint32')
+    # FIXME: it seems to have some trouble with label 0 in the segmentation:
+    seg += 1
+
+    gt = np.array(gt)
+    gt = np.require(gt, requirements=['C'])
+    gt = (gt - 1).astype('uint32')
+    # assert gt.min() >= -1
+
+
+    gt_ = Volume(gt)
+    seg_ = Volume(seg)
+
+    metrics = NeuronIds(gt_, border_threshold=border_threshold)
+    arand = metrics.adapted_rand(seg_)
+
+    vi_s, vi_m = metrics.voi(seg_)
+    cs = np.sqrt(arand * (vi_s + vi_m))
+    # cs = (vi_s + vi_m + arand) / 3.
+    if return_all_scores:
+        return {'cremi-score': cs, 'vi-merge': vi_m, 'vi-split': vi_s, 'adapted-rand': arand}
+    else:
+        return cs
