@@ -21,13 +21,13 @@ def solve_multicut(graph, edge_costs, p=None, solver_type="exact_solver",
 
 
     if fusion_moves_kwargs is None:
-        fusion_moves_kwargs = {'numberOfIterations': 10, # Max number of iterations
-                                'stopIfNoImprovement': 1, # If no improvements, I stop earlier
-                               'numberOfThreads': 4 # Parallel solutions of the fusionMove
+        fusion_moves_kwargs = {'numberOfIterations': 100, # Max number of iterations
+                                'stopIfNoImprovement': 10, # If no improvements, I stop earlier
+                               'numberOfThreads': 1 # Parallel solutions of the fusionMove
         }
     if proposal_gener_WS_kwargs is None:
-        proposal_gener_WS_kwargs = {'sigma': 1.5, # Amount of noise added
-                                 'numberOfSeeds': 0.1 # Fractions of nodes that are randomly selected as seeds
+        proposal_gener_WS_kwargs = {'sigma': 2.0, # Amount of noise added
+                                 'numberOfSeeds': 0.009 # Fractions of nodes that are randomly selected as seeds
         }
     if proposal_gener_HC_kwargs is None:
         proposal_gener_HC_kwargs = {'sigma':1.5,
@@ -97,11 +97,14 @@ def solve_multicut(graph, edge_costs, p=None, solver_type="exact_solver",
         # 4. Run the funsionMuves solver
         if proposal_generator_type == "WS":
             pgen = mc_obj.watershedCcProposals(**proposal_gener_WS_kwargs)
-        elif proposal_gener_WS_kwargs == "HC":
-            raise NotImplementedError("Not currently implemented in nifty!")
+        elif proposal_generator_type == "HC":
             pgen = mc_obj.greedyAdditiveCcProposals(**proposal_gener_HC_kwargs)
         else:
             raise ValueError("Passed type of proposal generator is not implemented")
+        # fsMoveSett = mc_obj.fusionMoveSettings(mc_obj.cgcFactory(doCutPhase=True, doGlueAndCutPhase=True, mincutFactory=None,
+        #     multicutFactory=None,
+        #     doBetterCutPhase=False, nodeNumStopCond=0.1, sizeRegularizer=1.0))
+
         solverFactory = mc_obj.ccFusionMoveBasedFactory(proposalGenerator=pgen, **fusion_moves_kwargs)
         solver = solverFactory.create(mc_obj)
         final_node_labels = solver.optimize(visitor=log_visitor, nodeLabels=new_node_labels)
