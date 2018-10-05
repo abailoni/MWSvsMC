@@ -4,8 +4,12 @@ import nifty.graph.rag as nrag
 import vigra
 import numpy as np
 
-from cremi.evaluation import NeuronIds
-from cremi import Volume
+try:
+    from cremi.evaluation import NeuronIds
+    from cremi import Volume
+except ImportError:
+    print("Warning: for the evaluation score the cremi repository should be installed")
+
 
 # -----------------------
 # HELPER FUNCTIONS:
@@ -160,3 +164,17 @@ def cremi_score(gt, seg, return_all_scores=False, border_threshold=None):
         return {'cremi-score': cs, 'vi-merge': vi_m, 'vi-split': vi_s, 'adapted-rand': arand}
     else:
         return cs
+
+
+def probs_to_costs(probs,
+                   beta=.5):
+    # Probs: prob. map (0: merge; 1: split)
+    p_min = 0.001
+    p_max = 1. - p_min
+    # Costs: positive (merge), negative (split)
+    costs = (p_max - p_min) * probs + p_min
+
+    # probabilities to energies, second term is boundary bias
+    costs = np.log((1. - costs) / costs) + np.log((1. - beta) / beta)
+
+    return costs
