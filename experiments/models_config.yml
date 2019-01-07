@@ -40,7 +40,12 @@ few_long_rage_edges:
     generalized_HC_kwargs:
       probability_long_range_edges: 0.01
 
-
+impose_local_attraction:
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          impose_local_attraction: True
 
 only_local_edges:
   postproc:

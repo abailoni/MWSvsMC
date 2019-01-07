@@ -1,6 +1,7 @@
 import sys
 
 sys.path += ["/home/abailoni_local/hci_home/python_libraries/nifty/python",
+"/home/abailoni_local/hci_home/python_libraries/cremi_python",
 "/home/abailoni_local/hci_home/pyCharm_projects/inferno",
 "/home/abailoni_local/hci_home/pyCharm_projects/constrained_mst",
 "/home/abailoni_local/hci_home/pyCharm_projects/neuro-skunkworks",
@@ -11,44 +12,172 @@ sys.path += ["/home/abailoni_local/hci_home/python_libraries/nifty/python",
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
+import vigra
 import nifty as nf
 import nifty.graph.agglo as nagglo
-import vigra
 import numpy as np
 import os
 
 from skimage import io
 import argparse
 import time
+import yaml
 import json
+
 
 
 from compareMCandMWS import utils as utils
 
-from segmfriends.utils.config_utils import adapt_configs_to_model
+from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict
+from segmfriends.io.load import parse_offsets
+from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
+from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
+from segmfriends.algorithms.blockwise import BlockWise
+
 from skunkworks.metrics.cremi_score import cremi_score
+from long_range_hc.postprocessing.pipelines import get_segmentation_pipeline
+
+
+
+
+def get_segmentation(affinities, offsets, post_proc_config):
+    n_threads = post_proc_config.pop('nb_threads')
+    invert_affinities = post_proc_config.pop('invert_affinities', False)
+    segm_pipeline_type = post_proc_config.pop('segm_pipeline_type', 'gen_HC')
+
+    segmentation_pipeline = get_segmentation_pipeline(
+        segm_pipeline_type,
+        offsets,
+        nb_threads=n_threads,
+        invert_affinities=invert_affinities,
+        return_fragments=False,
+        **post_proc_config
+    )
+
+    if post_proc_config.get('use_final_agglomerater', False):
+        final_agglomerater = GreedyEdgeContractionAgglomeraterFromSuperpixels(
+                        offsets,
+                        n_threads=n_threads,
+                        invert_affinities=invert_affinities,
+                         **post_proc_config['generalized_HC_kwargs']['final_agglomeration_kwargs']
+        )
+    else:
+        final_agglomerater = None
+
+
+    post_proc_solver = BlockWise(segmentation_pipeline=segmentation_pipeline,
+              offsets=offsets,
+                                 final_agglomerater=final_agglomerater,
+              blockwise=post_proc_config.get('blockwise', False),
+              invert_affinities=invert_affinities,
+              nb_threads=n_threads,
+              return_fragments=False,
+              blockwise_config=post_proc_config.get('blockwise_kwargs', {}))
+
+
+
+
+    print("Starting prediction...")
+    tick = time.time()
+    pred_segm, MC_energy = post_proc_solver(affinities)
+    comp_time = time.time() - tick
+    print("Post-processing took {} s".format(comp_time))
+    # print("Pred. sahpe: ", pred_segm.shape)
+    # if not use_test_datasets:
+    #     print("GT shape: ", gt.shape)
+    #     print("Min. GT label: ", gt.min())
+
+    # if post_proc_config.get('stacking_2D', False):
+    #     print('2D stacking...')
+    #     stacked_pred_segm = np.empty_like(pred_segm)
+    #     max_label = 0
+    #     for z in range(pred_segm.shape[0]):
+    #         slc = vigra.analysis.labelImage(pred_segm[z].astype(np.uint32))
+    #         stacked_pred_segm[z] = slc + max_label
+    #         max_label += slc.max() + 1
+    #     pred_segm = stacked_pred_segm
+
+    # pred_segm_WS = None
+    # if post_proc_config.get('thresh_segm_size', 0) != 0:
+    grow = SizeThreshAndGrowWithWS(post_proc_config['thresh_segm_size'],
+             offsets,
+             hmap_kwargs=post_proc_config['prob_map_kwargs'],
+             apply_WS_growing=True,)
+    pred_segm_WS = grow(affinities, pred_segm)
+
+
+    # SAVING RESULTS:
+    evals = cremi_score(gt, pred_segm, border_threshold=None, return_all_scores=True)
+    evals_WS = cremi_score(gt, pred_segm_WS, border_threshold=None, return_all_scores=True)
+    print("Scores achieved: ", evals_WS)
+
+    ID = str(np.random.randint(10000000))
+
+    extra_agglo = post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['extra_aggl_kwargs']
+    agglo_type = extra_agglo['update_rule']
+    non_link = extra_agglo['add_cannot_link_constraints']
+    edge_prob = str(np.asscalar(post_proc_config['generalized_HC_kwargs']['probability_long_range_edges']))
+
+
+    result_file = os.path.join('/home/abailoni_local/', 'generalized_GED_comparison_local_attraction.json')
+    # result_dict = yaml2dict(result_file)
+    # result_dict = {} if result_dict is None else result_dict
+    if os.path.exists(result_file):
+        with open(result_file, 'rb') as f:
+            result_dict = json.load(f)
+        os.remove(result_file)
+    else:
+        result_dict = {}
+
+
+
+    new_results = {}
+    new_results[agglo_type] = {}
+    new_results[agglo_type][str(non_link)] = {}
+    new_results[agglo_type][str(non_link)][edge_prob] = {}
+    new_results[agglo_type][str(non_link)][edge_prob][ID] = {'energy': np.asscalar(MC_energy), 'score': evals, 'score_WS': evals_WS, 'runtime': comp_time}
+
+    file_name = "{}_{}_{}".format(ID, agglo_type, edge_prob)
+    # file_path = os.path.join('/net/hciserver03/storage/abailoni/GEC_comparison', file_name)
+    file_path = os.path.join('/home/abailoni_local/GEC_comparison_local_attraction', file_name)
+
+    result_dict = recursive_dict_update(new_results, result_dict)
+
+    with open(result_file, 'w') as f:
+        json.dump(result_dict, f, indent=4, sort_keys=True)
+        # yaml.dump(result_dict, f)
+
+    # Save some data:
+    vigra.writeHDF5(pred_segm.astype('uint32'), file_path, 'segm')
+    vigra.writeHDF5(pred_segm_WS.astype('uint32'), file_path, 'segm_WS')
+
+
+
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--crop_slice', default=None)
-    parser.add_argument('--n_threads', default=1, type=int)
-    parser.add_argument('--name_aggl', default=None)
-    parser.add_argument('--model_IDs', nargs='+', default=None, type=str)
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('--crop_slice', default=None)
+    # parser.add_argument('--n_threads', default=1, type=int)
+    # parser.add_argument('--name_aggl', default=None)
+    # parser.add_argument('--model_IDs', nargs='+', default=None, type=str)
+    # args = parser.parse_args()
 
-    models_IDs = args.model_IDs
+    # models_IDs = args.model_IDs
+    #
+    # configs = {'models': yaml2dict('./experiments/models_config.yml'),
+    #     'postproc': yaml2dict('./experiments/post_proc_config.yml')}
+    # if models_IDs is not None:
+    #     configs = adapt_configs_to_model(models_IDs, debug=True, **configs)
+    #
+    # postproc_config = configs['postproc']
 
-    configs = {'models': yaml2dict('./experiments/models_config.yml'),
-        'postproc': {}}
-    if models_IDs is not None:
-        configs = adapt_configs_to_model(models_IDs, debug=True, **configs)
 
-    postproc_config = configs['postproc']
-    aggl_kwargs = postproc_config.get('generalized_HC_kwargs', {}).get('agglomeration_kwargs', {}).get(
-        'extra_aggl_kwargs', {})
 
+    # -----------------
+    # Load data:
+    # -----------------
     root_path = "/export/home/abailoni/supervised_projs/divisiveMWS"
     # dataset_path = os.path.join(root_path, "cremi-dataset-crop")
     dataset_path = "/net/hciserver03/storage/abailoni/datasets/ISBI/"
@@ -56,7 +185,7 @@ if __name__ == '__main__':
     save_path = os.path.join(root_path, "outputs")
 
     # Import data:
-    affinities  = 1 - vigra.readHDF5(os.path.join(dataset_path, "isbi_results_MWS/isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"), 'data')
+    affinities  = vigra.readHDF5(os.path.join(dataset_path, "isbi_results_MWS/isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"), 'data')
     raw = io.imread(os.path.join(dataset_path, "train-volume.tif"))
     raw = np.array(raw)
     gt = vigra.readHDF5(os.path.join(dataset_path, "gt_mc3d.h5"), 'data')
@@ -74,129 +203,18 @@ if __name__ == '__main__':
     volume_shape = raw.shape
     print(volume_shape)
 
-    # Offsets defines the 3D-connectivity patterns of the edges in the 3D pixel grid graph:
-    nb_local_offsets = 3
-    local_offsets = np.array([[-1, 0, 0], [0, -1, 0], [0, 0, -1]])  # Local edges in three directions
-    # Long-range connectivity patterns:
-    non_local_offsets = np.array([[-1, -1, -1],
-                                  [-1, 1, 1],
-                                  [-1, -1, 1],
-                                  [-1, 1, -1],
-                                  [0, -9, 0],
-                                  [0, 0, -9],
-                                  [0, -9, -9],
-                                  [0, 9, -9],
-                                  [0, -9, -4],
-                                  [0, -4, -9],
-                                  [0, 4, -9],
-                                  [0, 9, -4],
-                                  [0, -27, 0],
-                                  [0, 0, -27]])
-    offsets = np.concatenate((local_offsets, non_local_offsets))
+    offset_file = 'offsets_MWS.json'
+    offset_file = os.path.join('/net/hciserver03/storage/abailoni/pyCharm_projects/hc_segmentation/experiments/postprocessing/cremi/offsets/', offset_file)
+    offsets = parse_offsets(offset_file)
 
+    for _ in range(1):
+        for agglo in ['MEAN', 'MAX', 'MEAN_constr', 'greedyFixation', 'GAEC']:
+            for edge_prob in np.linspace(0.2, 1., 10):
+                configs = {'models': yaml2dict('./experiments/models_config.yml'),
+                           'postproc': yaml2dict('./experiments/post_proc_config.yml')}
+                configs = adapt_configs_to_model([agglo, 'impose_local_attraction'], debug=True, **configs)
+                postproc_config = configs['postproc']
+                postproc_config['generalized_HC_kwargs']['probability_long_range_edges'] = edge_prob
+                get_segmentation(affinities, offsets, postproc_config)
 
-
-    is_local_offset = [True] * 3 + [False] * 14
-
-    # BUILD GRAPH:
-    graph = nf.graph.undirectedLongRangeGridGraph(np.array(volume_shape), offsets,
-                                                     is_local_offset=np.array(is_local_offset))
-    nb_nodes = graph.numberOfNodes
-    nb_edges = graph.numberOfEdges
-
-    # Get IDs of the local edges in the graph:
-    offset_index = graph.edgeOffsetIndex()
-    is_edge_local = np.zeros((nb_edges,), dtype='bool')
-    is_edge_local[offset_index < nb_local_offsets] = True
-
-
-    # These three arrays should be enough for your algorithm:
-    # and in principle now if you really want to build the adj. matrix it should be really easy
-    uvIds = graph.uvIds()  # returned shape: (nb_edges, 2)
-    edge_weights = graph.edgeValues(np.rollaxis(affinities, axis=0, start=4))  # returned shape: (nb_edges, )
-
-    multicut_costs = utils.probs_to_costs(1 - edge_weights)
-
-    if aggl_kwargs.pop('use_log_costs', False):
-        signed_weights = multicut_costs
-    else:
-        signed_weights = edge_weights - 0.5
-
-    # is_edge_attractive = is_edge_local.copy()  # returned shape: (nb_edges, )
-    # edge_weights[is_edge_attractive] = 1. - edge_weights[is_edge_attractive]
-    print("Number of nodes and edges: ", graph.numberOfNodes, graph.numberOfEdges)
-
-
-    cluster_policy = nagglo.greedyGraphEdgeContraction(graph, signed_weights,
-                                                       is_merge_edge=is_edge_local,
-                                                       **aggl_kwargs
-                                                       )
-
-    agglomerativeClustering = nagglo.agglomerativeClustering(cluster_policy)
-    # agglomerativeClustering.run(**self.extra_runAggl_kwargs)
-    tick = time.time()
-
-    from skunkworks.postprocessing.watershed import DamWatershed
-    mws = DamWatershed(list(offsets), [1, 1, 1],
-                       seperating_channel=3, invert_dam_channels=True,
-                       randomize_bounds=False,
-                       )
-
-    final_segm = mws(1 - affinities)
-
-    # outputs = agglomerativeClustering.runAndGetMergeTimesAndDendrogramHeight(verbose=False)
-    # mergeTimes, UCMap = outputs
-    # nodeSeg = agglomerativeClustering.result()
-
-    comp_time = time.time() - tick
-
-    # edge_IDs = graph.mapEdgesIDToImage()
-    #
-    # # final_UCM = np.squeeze(
-    # #     mappings.map_features_to_label_array(edge_IDs, np.expand_dims(mergeTimes, axis=-1)))
-    #
-    #
-    # edge_labels = graph.nodesLabelsToEdgeLabels(nodeSeg)
-    # MC_energy = (multicut_costs * edge_labels).sum()
-    # print("MC energy: {}".format(MC_energy))
-    #
-    #
-    #
-    # # PLOT a slice of the final segmented volume:
-    # final_segm = nodeSeg.reshape(volume_shape)
-    ncols, nrows = 1, 1
-    f, ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(7, 7))
-    utils.plot_segm(ax, final_segm, z_slice=0, highlight_boundaries=False)
-    f.savefig(os.path.join(plots_path, 'segm_{}_eff.png'.format(models_IDs[0])), format='png', dpi=300)
-
-    ncols, nrows = 1, 1
-    f, ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(7, 7))
-    utils.plot_segm(ax, final_segm, z_slice=0, background=raw)
-    f.savefig(os.path.join(plots_path, 'segm_{}_2_eff.png'.format(models_IDs[0])), format='png', dpi=300)
-
-    # # PLOT a slice of the final segmented volume:
-    # ncols, nrows = 2, 1
-    # f, ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(7, 7))
-    #
-    # print(mapped_edge_push[0, :, :, 1:3, 0].min() , mapped_edge_push[0, :, :, 1:3, 0].max())
-    # print(mapped_edge_push[0, :, :, 0, 0].min(), mapped_edge_push[0, :, :, 0, 0].max())
-    # ax[0].matshow(raw[0], cmap='gray', interpolation='none')
-    # ax[1].matshow(affinities[2,0], cmap='gray', interpolation='none')
-    # cax = ax[0].matshow(mask_the_mask(mapped_edge_push[0,:,:,1,0]), cmap=plt.get_cmap('cool'), interpolation='none')
-    # cax = ax[1].matshow(mask_the_mask(mapped_edge_push[0, :, :,2, 0]), cmap=plt.get_cmap('cool'), interpolation='none')
-    # f.savefig(os.path.join(plots_path, 'strength_edges{}_iterations.png'.format(nb_iterations)), format='png',  dpi = 300)
-
-    evals = cremi_score(gt, final_segm, border_threshold=None, return_all_scores=True)
-    print("Scores achieved: ", evals)
-
-    eval_file = os.path.join(plots_path, 'scores_{}_eff.json'.format(models_IDs[0]))
-
-    evals['computation_time'] = comp_time
-    # evals['MC_energy'] = np.asscalar(MC_energy)
-    with open(eval_file, 'w') as f:
-        json.dump(evals, f, indent=4, sort_keys=True)
-
-
-    # Save some data:
-    vigra.writeHDF5(final_segm.astype('uint32'), os.path.join(plots_path, "out_{}_eff.h5".format(models_IDs[0])), 'data')
 
