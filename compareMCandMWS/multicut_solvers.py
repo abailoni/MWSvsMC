@@ -27,7 +27,8 @@ def solve_multicut(graph, edge_costs, p=None, solver_type="exact_solver",
         }
     if proposal_gener_WS_kwargs is None:
         proposal_gener_WS_kwargs = {'sigma': 2.0, # Amount of noise added
-                                 'numberOfSeeds': 0.009 # Fractions of nodes that are randomly selected as seeds
+                                 'numberOfSeeds': 0.009, # Fractions of nodes that are randomly selected as seeds
+                                    'seedingStrategie': "SEED_FROM_NEGATIVE"
         }
     if proposal_gener_HC_kwargs is None:
         proposal_gener_HC_kwargs = {'sigma':1.5,

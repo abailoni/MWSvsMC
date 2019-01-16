@@ -60,7 +60,7 @@ def node_labels_from_spanning_forest(graph, spanning_forest):
 
 
 
-class DivisiveMWS(object):
+class TreeMWS(object):
     def __init__(self, graph, edge_weights, is_attractive_edge):
         """
         The expected edge weights are like the ones described in the MWS paper:
@@ -69,7 +69,7 @@ class DivisiveMWS(object):
          - if an edge is repulsive, high weight means that it does NOT want to be connected
 
         """
-        raise DeprecationWarning("The current function is now implemented in the affogato repo")
+
         assert (edge_weights < 0.).sum() == 0, "Edge weights should be all positive!"
         assert edge_weights.shape == is_attractive_edge.shape
         assert edge_weights.shape[0] == graph.numberOfEdges
@@ -111,8 +111,9 @@ class DivisiveMWS(object):
             cv = self.contrGraph.findRepresentativeNode(v)
 
             # Avoid cycles in the tree:
-            if (cu != cv) and self.is_edge_attractive[e]:
-                max_spanning_tree[e] = 1
+            if (cu != cv):
+                if self.is_edge_attractive[e]:
+                    max_spanning_tree[e] = 1
 
                 # Remember about this weaked edge:
                 weakest_edges[self.uf_edges.find(e)] = e
@@ -121,34 +122,8 @@ class DivisiveMWS(object):
                 ce = self.contrGraph.findRepresentativeEdge(e)
                 self.contrGraph.contractEdge(ce)
 
-        edge_push = np.zeros_like(self.edge_weights, dtype='float32')
-
-        # Enforce the repulsive constraints:
-        nb_iterations = nb_iterations if nb_iterations>=0 else self.nb_edges
         # This tree (or forest) will represent the final segmentation:
         clustering_forest = max_spanning_tree.copy()
-        # Now we loop again over the sorted edges, but we only look at the repulsive ones:
-        i = 0
-        for e in edge_arg_sort:
-            if i >= nb_iterations:
-                break
-
-            if not self.is_edge_attractive[e]:
-                # Find the parent edge in the UF structure and compare to the weakest
-                # edge on the induced cycle:
-                parent_e = self.uf_edges.find(e)
-                weakest_edge_in_cycle = weakest_edges[parent_e]
-
-                # edge_push[weakest_edge_in_cycle] += self.edge_weights[e] - self.edge_weights[weakest_edge_in_cycle]
-
-                # If the repulsive edge is stronger than the attractive weakest one, take out
-                # the edge from the forest:
-                if self.edge_weights[weakest_edge_in_cycle] < self.edge_weights[e]:
-                    clustering_forest[weakest_edge_in_cycle] = 0
-                    i += 1
-                    edge_push[weakest_edge_in_cycle] = 1 if edge_push[weakest_edge_in_cycle]==0 else edge_push[weakest_edge_in_cycle]
-                else:
-                    edge_push[weakest_edge_in_cycle] = -1 if edge_push[weakest_edge_in_cycle]==0 else edge_push[weakest_edge_in_cycle]
 
 
         # Get the final node_labelling from the obtained spanning forest:
@@ -156,5 +131,5 @@ class DivisiveMWS(object):
 
         final_edge_labels = self.graph.nodesLabelsToEdgeLabels(final_node_labels)
 
-        return final_node_labels, final_edge_labels, edge_push
+        return final_node_labels, final_edge_labels
 

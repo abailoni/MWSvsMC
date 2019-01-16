@@ -4,6 +4,14 @@ import time
 
 
 def MWS(graph, edge_weights, is_attractive_edge):
+    """
+    The expected edge weights are like the ones described in the MWS paper:
+     - all weights are positive (here in particular all in the interval [0., 1.0])
+     - if an edge is attractive, high weight means that it wants to be connected
+     - if an edge is repulsive, high weight means that it does NOT want to be connected
+
+    """
+    print("Running slow implementation of the MWS...")
     assert (edge_weights<0.).sum() == 0, "Edge weights should be all positive!"
     assert edge_weights.shape == is_attractive_edge.shape
     assert edge_weights.shape[0] == graph.numberOfEdges

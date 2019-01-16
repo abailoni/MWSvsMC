@@ -9,6 +9,7 @@ import matplotlib.ticker
 
 from compareMCandMWS import utils as utils
 from compareMCandMWS.multicut_solvers import solve_multicut
+from compareMCandMWS.MWS import MWS
 import argparse
 
 
@@ -20,6 +21,7 @@ if __name__ == '__main__':
     root_path = "/export/home/abailoni/supervised_projs/MWS_vs_MC"
     # dataset_path = os.path.join(root_path, "cremi-dataset-crop")
     dataset_path = "/net/hciserver03/storage/abailoni/learnedHC/plain_unstruct/pureDICE_wholeTrainingSet/postprocess/inferName_v100k_repAttrHC095_B/"
+    # dataset_path = "/net/hciserver03/storage/abailoni/learnedHC/plain_unstruct/pureDICE_wholeTrainingSet/postprocess/inferName_v100k_DTWSnewDataSet_B/"
     plots_path = os.path.join(root_path, "plots")
     save_path = os.path.join(root_path, "outputs")
 
@@ -35,25 +37,30 @@ if __name__ == '__main__':
 
     # Compute edge sizes:
     shape = segm.shape
-    fake_data = np.zeros(shape, dtype='float32')
-    edge_sizes = nrag.accumulateEdgeMeanAndLength(rag, fake_data)[:, 1]
-    print(edge_sizes.min(), edge_sizes.max(), edge_sizes.mean())
-    edge_costs = edge_costs * edge_sizes / edge_sizes.max() * 16.
+    # fake_data = np.zeros(shape, dtype='float32')
+    # edge_sizes = nrag.accumulateEdgeMeanAndLength(rag, fake_data)[:, 1]
+    # print(edge_sizes.min(), edge_sizes.max(), edge_sizes.mean())
+    # edge_costs = edge_costs * edge_sizes / edge_sizes.max() * 16.
 
     # Solve multicut problem:
-    outputs = solve_multicut(rag, edge_costs, p=1, solver_type=args.solver_type,
-                             proposal_generator_type="WS",
-                             )
-    energy, final_node_labels, final_edge_labels, log_visitor, runtime = outputs
+    # outputs = solve_multicut(rag, edge_costs, p=1, solver_type=args.solver_type,
+    #                          proposal_generator_type="WS",
+    #                          )
+    # energy, final_node_labels, final_edge_labels, log_visitor, runtime = outputs
+    final_node_labels, runtime = MWS(rag, np.abs(edge_costs), edge_costs>=0)
+    final_edge_labels = rag.nodesLabelsToEdgeLabels(final_node_labels)
+    energy = (edge_costs * final_edge_labels).sum()
     print("Took {}s. Final energy: {}".format(runtime, (final_edge_labels*edge_costs).sum()))
 
-    # Plot 1: energy vs runtime
-    ncols, nrows = 1, 1
-    f, ax = plt.subplots(ncols=ncols, nrows=nrows)
-    ax.semilogy(log_visitor.runtimes(), -log_visitor.energies())
-    ax.set_yticks([2061, 2061.10, 2061.12133])
-    ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    f.savefig(os.path.join(plots_path, 'energy-runtime-{}.pdf'.format(args.solver_type)), format='pdf')
+
+
+    # # Plot 1: energy vs runtime
+    # ncols, nrows = 1, 1
+    # f, ax = plt.subplots(ncols=ncols, nrows=nrows)
+    # ax.semilogy(log_visitor.runtimes(), -log_visitor.energies())
+    # ax.set_yticks([2061, 2061.10, 2061.12133])
+    # ax.get_yaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
+    # f.savefig(os.path.join(plots_path, 'energy-runtime-{}.pdf'.format(args.solver_type)), format='pdf')
 
     # Plot 2: initial and final segmentation (take a 2D slice of the volume)
     final_segm = np.squeeze(utils.map_features_to_label_array(segm, np.expand_dims(final_node_labels, axis=-1)))
