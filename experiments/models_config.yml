@@ -84,6 +84,8 @@ MEAN:
         extra_aggl_kwargs:
           update_rule: 'mean'
           add_cannot_link_constraints: False
+#          remove_small_segments: True
+#          small_segments_thresh: 80
 
 
 
@@ -95,6 +97,8 @@ MAX:
         extra_aggl_kwargs:
           update_rule: 'max'
           add_cannot_link_constraints: False
+#          remove_small_segments: True
+#          small_segments_thresh: 80
 
 
 greedyFixation:
