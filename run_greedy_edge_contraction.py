@@ -51,7 +51,7 @@ from compareMCandMWS import utils as utils
 
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict, parse_data_slice
-from segmfriends.io.load import parse_offsets
+
 from segmfriends.io.save import get_hci_home_path
 from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
 from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
@@ -60,62 +60,9 @@ from segmfriends.algorithms.blockwise import BlockWise
 from skunkworks.metrics.cremi_score import cremi_score
 from long_range_hc.postprocessing.pipelines import get_segmentation_pipeline
 
-
-def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_connected_components=True):
-    assert dataset in ['ISBI', 'CREMI'], "Only Cremi and ISBI datasets are supported"
-    if crop_slice_str is not None:
-        crop_slice = tuple(parse_data_slice(crop_slice_str))
-        assert len(
-            crop_slice) == 4, "The passed slice should have 4 dimensions (including the offset dim. for affinities)"
-    else:
-        crop_slice = tuple([slice(None) for _ in range(4)])
-
-    home_path = get_hci_home_path()
-
-    if dataset == 'CREMI':
-        # -----------------
-        # Load CREMI dataset:
-        # -----------------
-        assert sample in ["A", "B", "C"]
-        cremi_path = os.path.join(home_path, "datasets/cremi/SOA_affinities/")
-        dt_path = os.path.join(cremi_path, "sample{}_train.h5".format(sample))
-        inner_path_GT = "segmentations/groundtruth_fixed_OLD" if sample == "B" else "segmentations/groundtruth_fixed"
-        inner_path_raw = "raw_old" if sample == "B" else "raw"
-        inner_path_affs = "predictions/full_affs"
-        with h5py.File(dt_path, 'r') as f:
-            GT = f[inner_path_GT][crop_slice[1:]]
-            affs = f[inner_path_affs][crop_slice]
-            # raw = f[inner_path_raw][crop_slice[1:]]
-    elif dataset == 'ISBI':
-        # -----------------
-        # Load ISBI dataset:
-        # -----------------
-        isbi_path = os.path.join(home_path, "abailoni/datasets/ISBI/")
-        affs = 1 - vigra.readHDF5(
-            os.path.join(isbi_path, "isbi_results_MWS/isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"), 'data')[
-            crop_slice]
-        # raw = io.imread(os.path.join(isbi_path, "train-volume.tif"))
-        # raw = np.array(raw)[crop_slice[1:]]
-        # gt_3D = vigra.readHDF5(os.path.join(isbi_path, "gt_mc3d.h5"), 'data')
-        GT = vigra.readHDF5(os.path.join(isbi_path, "gt_cleaned.h5"), 'data')
-        GT = np.transpose(GT, (2, 1, 0))[crop_slice[1:]]
-    else:
-        raise NotImplementedError
-
-    if crop_slice_str is not None and run_connected_components:
-        GT = vigra.analysis.labelVolumeWithBackground(GT.astype('uint32'))
-
-    return affs, GT
+from compareMCandMWS.load_datasets import get_dataset_data, get_dataset_offsets, CREMI_crop_slices, CREMI_sub_crops_slices
 
 
-def get_dataset_offsets(dataset='CREMI'):
-    """I know, it's crap code..."""
-    if dataset == "CREMI":
-        offset_file = 'SOA_offsets.json'
-    elif dataset == "ISBI":
-        offset_file = 'offsets_MWS.json'
-    offset_file = os.path.join(get_hci_home_path(), 'pyCharm_projects/hc_segmentation/experiments/postprocessing/cremi/offsets/', offset_file)
-    return parse_offsets(offset_file)
 
 
 # Add epsilon to affinities:
@@ -145,7 +92,8 @@ def combine_crop_slice_str(crop_str, subcrop_str):
 
 
 
-def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, edge_prob, agglo, local_attraction, save_UCM):
+def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, edge_prob, agglo, local_attraction, save_UCM,
+                     from_superpixels=False, use_multicut=False):
 
     offsets = get_dataset_offsets(dataset)
     # affinities, GT = get_dataset_data(dataset, sample, crop_slice, run_connected_components=False)
@@ -159,6 +107,11 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
     configs = {'models': yaml2dict('./experiments/models_config.yml'),
                'postproc': yaml2dict('./experiments/post_proc_config.yml')}
     model_keys = [agglo] if not local_attraction else [agglo, "impose_local_attraction"]
+    if from_superpixels:
+        if use_multicut:
+            model_keys = ["use_fragmenter", 'multicut_exact']
+        else:
+            model_keys += ["gen_HC_WS"]
     configs = adapt_configs_to_model(model_keys, debug=True, **configs)
     post_proc_config = configs['postproc']
     post_proc_config['generalized_HC_kwargs']['probability_long_range_edges'] = edge_prob
@@ -202,11 +155,49 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
 
     print("Starting prediction...")
     tick = time.time()
-    outs = post_proc_solver(affinities)
+    pred_segm, out_dict = post_proc_solver(affinities)
+    MC_energy = out_dict['MC_energy']
     if save_UCM:
-        pred_segm, MC_energy, UCM, mergeTimes = outs
-    else:
-        pred_segm, MC_energy = outs
+        UCM, mergeTimes = out_dict['UCM'], out_dict['mergeTimes']
+
+    if 'agglomeration_data' in out_dict:
+        # Make some nice plot! :)
+        from segmfriends import vis as vis
+        fig, ax = plt.subplots(ncols=1, nrows=2)
+
+        aggl_data = out_dict['agglomeration_data']
+
+        iterations = np.arange(aggl_data.shape[0])
+        ax[0].plot(iterations, aggl_data[:,0])
+        ax[0].set(ylabel='Maximum size of the segments')
+
+        iterations = np.arange(aggl_data[:].shape[0])
+        ax[1].plot(iterations, aggl_data[:, 1])
+        ax[1].set(xlabel='iterations', ylabel='Highest cost in PQ')
+
+        # ax.plot(iterations, aggl_data[:,1])
+        # affs_repr = np.linalg.norm(affs_repr, axis=0, keepdims=True)
+
+        # ax.imshow(affs_repr, interpolation="none")
+
+        # vis.plot_output_affin(ax, affinities, nb_offset=16, z_slice=0)
+        fig.savefig("./iteration_plot_{}.pdf".format(agglo))
+
+        fig, ax = plt.subplots(ncols=1, nrows=2)
+
+        iterations = np.arange(aggl_data[1:].shape[0])
+        ax[0].plot(iterations, aggl_data[1:, 2])
+        ax[0].set(ylabel='Mean size')
+        ax[1].plot(iterations, aggl_data[1:, 3])
+        ax[1].set(xlabel='iterations', ylabel='Variance size distribution')
+        # ax.plot(iterations, aggl_data[:,1])
+        # affs_repr = np.linalg.norm(affs_repr, axis=0, keepdims=True)
+
+        # ax.imshow(affs_repr, interpolation="none")
+
+        # vis.plot_output_affin(ax, affinities, nb_offset=16, z_slice=0)
+
+
     comp_time = time.time() - tick
     print("Post-processing took {} s".format(comp_time))
     # print("Pred. sahpe: ", pred_segm.shape)
@@ -238,11 +229,19 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
 
 
     # if post_proc_config.get('thresh_segm_size', 0) != 0:
-    grow = SizeThreshAndGrowWithWS(post_proc_config['thresh_segm_size'],
-             offsets,
-             hmap_kwargs=post_proc_config['prob_map_kwargs'],
-             apply_WS_growing=True,)
-    pred_segm_WS = grow(affinities, pred_segm)
+    if from_superpixels:
+        pred_segm_WS = pred_segm
+    else:
+        grow = SizeThreshAndGrowWithWS(post_proc_config['thresh_segm_size'],
+                 offsets,
+                 hmap_kwargs=post_proc_config['prob_map_kwargs'],
+                 apply_WS_growing=True,)
+        pred_segm_WS = grow(affinities, pred_segm)
+
+
+    fig, ax = plt.subplots(ncols=1, nrows=1)
+    vis.plot_segm(ax, pred_segm_WS, z_slice=0, )
+    fig.savefig("./segm_{}.pdf".format(agglo))
 
 
     # SAVING RESULTS:
@@ -251,11 +250,15 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
     print("Scores achieved WS: ", evals_WS)
     print("Scores achieved: ", evals)
 
-    ID = str(np.random.randint(10000000))
+    ID = str(np.random.randint(1000000000))
 
     extra_agglo = post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['extra_aggl_kwargs']
-    agglo_type = extra_agglo['update_rule']
-    non_link = extra_agglo['add_cannot_link_constraints']
+    if use_multicut:
+        agglo_type = "MC_WS"
+        non_link = None
+    else:
+        agglo_type = extra_agglo['update_rule']
+        non_link = extra_agglo['add_cannot_link_constraints']
 
     EXPORT_PATH = os.path.join(get_hci_home_path(), 'GEC_comparison_longRangeGraph')
 
@@ -273,7 +276,10 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
     new_results["non_link"] = non_link
     new_results["edge_prob"] = edge_prob
     new_results.update({'energy': np.asscalar(MC_energy), 'score': evals, 'score_WS': evals_WS, 'runtime': comp_time})
+    new_results['postproc_config'] = post_proc_config
 
+    if from_superpixels:
+        new_results["from_superpixels"] = "DTWS"
 
     with open(result_file, 'w') as f:
         json.dump(new_results, f, indent=4, sort_keys=True)
@@ -302,31 +308,6 @@ if __name__ == '__main__':
     # save_path = os.path.join(root_path, "outputs")
 
 
-    crop_slices = {
-        "A": [    ":, 0: 31,:1300, -1300:",
-                ":, 31: 62,:1300, -1300:",
-                ":, 62: 93, 25: 1325,:1300",
-                ":, 93: 124, -1300:,:1300"
-                  ],
-        "B": [
-                ":, 0: 31, 50: 1350, 200: 1500",
-                ":, 31: 62, 20: 1320, 400: 1700",
-                ":, 62: 93, 90: 1390, 580: 1880",
-                ":, 93: 124, -1300:, 740: 2040",
-        ],
-        "C": [
-                ":, 0: 31, -1300:,:1300",
-                ":, 31: 62, 150: 1450, 95: 1395",
-                ":, 62: 93, 70: 1370, 125: 1425",
-                ":, 93: 124,:1300, -1300:",
-        ]
-    }
-
-    sub_crops_slices = [":,2:, 100:600, 100:600",
-                        ":,2:, 100:600, 600:1100",
-                        ":,2:, 600:1100, 600:1100",
-                        ":,2:, 600:1100, 100:600",
-                        ]
 
 
     all_agglo_type = []
@@ -340,14 +321,17 @@ if __name__ == '__main__':
     all_affinites = []
     all_GTs = []
 
+    len_cremi_slices = max([len(CREMI_crop_slices[smpl]) for smpl in CREMI_crop_slices])
+    len_cremi_sub_slices = len(CREMI_sub_crops_slices)
+
     all_affinities_blocks = {
-        "A": [[None for _ in range(4)] for _ in range(4)],
-        "B": [[None for _ in range(4)] for _ in range(4)],
-        "C" : [[None for _ in range(4)] for _ in range(4)], }
+        "A": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
+        "B": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
+        "C" : [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)], }
     all_GT_blocks = {
-        "A": [[None for _ in range(4)] for _ in range(4)],
-        "B": [[None for _ in range(4)] for _ in range(4)],
-        "C" : [[None for _ in range(4)] for _ in range(4)], }
+        "A": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
+        "B": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
+        "C" : [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)], }
 
     tick = time.time()
 
@@ -365,45 +349,84 @@ if __name__ == '__main__':
     #             all_GT_blocks[sample][crop][sub_crop] = GT
 
     check = False
-    for sample in ["C", "A"]:
-        for crop in range(1,2):
-            for sub_crop in range(2,3):
-                if all_affinities_blocks[sample][crop][sub_crop] is None:
-                    # Load data:
-                    affinities, GT = get_dataset_data("CREMI", sample, crop_slices[sample][crop],
-                                                      run_connected_components=False)
-                    sub_crop_slc = parse_data_slice(sub_crops_slices[sub_crop])
-                    affinities = affinities[sub_crop_slc]
-                    GT = GT[sub_crop_slc[1:]]
-                    GT = vigra.analysis.labelVolumeWithBackground(GT.astype('uint32'))
-                    affinities = add_epsilon(affinities)
-                    all_affinities_blocks[sample][crop][sub_crop] = affinities
-                    all_GT_blocks[sample][crop][sub_crop] = GT
+    for _ in range(1):
+        for sample in ["B"]:
+            for crop in range(0,1):  # 5       MC: 4
+                for sub_crop in range(5,6): # 5     MC: 6
+                    if all_affinities_blocks[sample][crop][sub_crop] is None:
+                        # Load data:
+                        affinities, GT = get_dataset_data("CREMI", sample, CREMI_crop_slices[sample][crop],
+                                                          run_connected_components=False)
+                        sub_crop_slc = parse_data_slice(CREMI_sub_crops_slices[sub_crop])
+                        affinities = affinities[sub_crop_slc]
+                        GT = GT[sub_crop_slc[1:]]
+                        GT = vigra.analysis.labelVolumeWithBackground(GT.astype('uint32'))
+                        affinities = add_epsilon(affinities)
+                        all_affinities_blocks[sample][crop][sub_crop] = affinities
+                        all_GT_blocks[sample][crop][sub_crop] = GT
 
-                for local_attr in [False, True]:
-                    for agglo in ['MAX']:
-                    # for agglo in ['MEAN', 'MAX', 'MEAN_constr', 'greedyFixation', 'GAEC']:
-                    # for agglo in ['MEAN', 'MAX', 'MEAN_constr']:
-                        if local_attr and agglo in ['greedyFixation', 'GAEC']:
-                            continue
-                        for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 21), np.linspace(0.11, 1., 21))):
-                            all_datasets.append('CREMI')
-                            all_samples.append(sample)
-                            all_crops.append(crop_slices[sample][crop])
-                            all_sub_crops.append(sub_crops_slices[sub_crop])
-                            all_local_attr.append(local_attr)
-                            all_agglo_type.append(agglo)
-                            all_edge_prob.append(edge_prob)
-                            saveUCM = True if edge_prob > 0.0999 and edge_prob < 0.1001 and agglo != 'MAX' else False
-                            if saveUCM and not check:
-                                print("UCM scheduled!")
-                                check = True
-                            all_UCM.append(saveUCM)
-                            assert all_affinities_blocks[sample][crop][sub_crop] is not None
-                            all_affinites.append(all_affinities_blocks[sample][crop][sub_crop])
-                            all_GTs.append(all_GT_blocks[sample][crop][sub_crop])
+                    for local_attr in [False]:
+                        for agglo in ['MEAN', 'MEAN_constr', "GAEC", "MAX", 'greedyFixation']:
+                        # for agglo in ['MEAN', 'MAX', 'greedyFixation', 'GAEC', 'MEAN_constr']:
+                        # for agglo in ['MEAN', 'MAX', 'MEAN_constr']:
+                            if local_attr and agglo in ['greedyFixation', 'GAEC']:
+                                continue
+                            # for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 17), np.linspace(0.11, 0.8, 18))):
+                            for edge_prob in [0.05]:
+                                all_datasets.append('CREMI')
+                                all_samples.append(sample)
+                                all_crops.append(CREMI_crop_slices[sample][crop])
+                                all_sub_crops.append(CREMI_sub_crops_slices[sub_crop])
+                                all_local_attr.append(local_attr)
+                                all_agglo_type.append(agglo)
+                                all_edge_prob.append(edge_prob)
+                                saveUCM = True if edge_prob > 0.0999 and edge_prob < 0.1001 and agglo != 'MAX' else False
+                                saveUCM = False
+                                if saveUCM and not check:
+                                    print("UCM scheduled!")
+                                    check = True
+                                all_UCM.append(saveUCM)
+                                assert all_affinities_blocks[sample][crop][sub_crop] is not None
+                                all_affinites.append(all_affinities_blocks[sample][crop][sub_crop])
+                                all_GTs.append(all_GT_blocks[sample][crop][sub_crop])
 
-    # get_segmentation("CREMI", "B", ":,:31,:500,:500", ":,:,:,:", 0.1, "MEAN", True, True)
+    # for sample in ["C", "A"]:
+    #     for crop in range(1,2):
+    #         for sub_crop in range(2,3):
+    #             if all_affinities_blocks[sample][crop][sub_crop] is None:
+    #                 # Load data:
+    #                 affinities, GT = get_dataset_data("CREMI", sample, crop_slices[sample][crop],
+    #                                                   run_connected_components=False)
+    #                 sub_crop_slc = parse_data_slice(sub_crops_slices[sub_crop])
+    #                 affinities = affinities[sub_crop_slc]
+    #                 GT = GT[sub_crop_slc[1:]]
+    #                 GT = vigra.analysis.labelVolumeWithBackground(GT.astype('uint32'))
+    #                 affinities = add_epsilon(affinities)
+    #                 all_affinities_blocks[sample][crop][sub_crop] = affinities
+    #                 all_GT_blocks[sample][crop][sub_crop] = GT
+    #
+    #             for local_attr in [False, True]:
+    #                 for agglo in ['MAX']:
+    #                 # for agglo in ['MEAN', 'MAX', 'MEAN_constr', 'greedyFixation', 'GAEC']:
+    #                 # for agglo in ['MEAN', 'MAX', 'MEAN_constr']:
+    #                     if local_attr and agglo in ['greedyFixation', 'GAEC']:
+    #                         continue
+    #                     for edge_prob in np.linspace(0.11, 0.7, 15):
+    #                         all_datasets.append('CREMI')
+    #                         all_samples.append(sample)
+    #                         all_crops.append(crop_slices[sample][crop])
+    #                         all_sub_crops.append(sub_crops_slices[sub_crop])
+    #                         all_local_attr.append(local_attr)
+    #                         all_agglo_type.append(agglo)
+    #                         all_edge_prob.append(edge_prob)
+    #                         saveUCM = True if edge_prob > 0.0999 and edge_prob < 0.1001 and agglo != 'MAX' else False
+    #                         if saveUCM and not check:
+    #                             print("UCM scheduled!")
+    #                             check = True
+    #                         all_UCM.append(saveUCM)
+    #                         assert all_affinities_blocks[sample][crop][sub_crop] is not None
+    #                         all_affinites.append(all_affinities_blocks[sample][crop][sub_crop])
+    #                         all_GTs.append(all_GT_blocks[sample][crop][sub_crop])
     print("Loaded dataset in {}s".format(time.time() - tick))
 
     print("Agglomarations to run: ", len(all_datasets))
@@ -411,7 +434,9 @@ if __name__ == '__main__':
     # Multithread:
     from multiprocessing.pool import ThreadPool
     from itertools import repeat
-    pool = ThreadPool(processes=12)
+    pool = ThreadPool(processes=1)
+
+
 
     pool.starmap(get_segmentation,
                  zip(all_affinites,

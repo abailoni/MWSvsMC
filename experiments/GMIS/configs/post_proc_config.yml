@@ -5,7 +5,7 @@ blockwise: False
 #return_fragments: False
 use_final_agglomerater: False
 stacking_2D: False
-thresh_segm_size: 40
+thresh_segm_size: 120
 
 blockwise_kwargs:
   crop_padding: True
@@ -56,11 +56,13 @@ multicut_kwargs:
 
 generalized_HC_kwargs:
 
-#  nb_local_offsets: 3
-  probability_long_range_edges: 0.08
+
+  probability_long_range_edges: 1.0
 
   agglomeration_kwargs:
-    nb_merge_offsets: 17
+#    nb_merge_offsets: 8
+    nb_merge_offsets: 48
+    debug: False
     max_distance_lifted_edges: 1
 #    offsets_weights: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 #    offsets_weights: [1., 1., 1., 2., 3, 3, 3, 9, 9, 4, 27, 27]
