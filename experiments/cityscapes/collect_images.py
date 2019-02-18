@@ -1,69 +1,9 @@
-import sys
-
-sys.path += ["/home/abailoni_local/hci_home/python_libraries/nifty/python",
-"/home/abailoni_local/hci_home/python_libraries/cremi_python",
-"/home/abailoni_local/hci_home/python_libraries/affogato/python",
-"/home/abailoni_local/hci_home/pyCharm_projects/inferno",
-"/home/abailoni_local/hci_home/pyCharm_projects/MWSvsMC",
-"/home/abailoni_local/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni_local/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni_local/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni_local/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni_local/hci_home/pyCharm_projects/neurofire",]
-
-sys.path += ["/home/abailoni/hci_home/python_libraries/nifty/python",
-"/home/abailoni/hci_home/python_libraries/cremi_python",
-"/home/abailoni/hci_home/python_libraries/affogato/python",
-"/home/abailoni/hci_home/pyCharm_projects/inferno",
-"/home/abailoni/hci_home/pyCharm_projects/MWSvsMC",
-"/home/abailoni/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni/hci_home/pyCharm_projects/neurofire",]
+# Add missing package-paths
+import long_range_compare
 
 
-sys.path += [
-"/net/hciserver03/storage/abailoni/pyCharm_projects/hc_segmentation",
-"/net/hciserver03/storage/abailoni/pyCharm_projects/MWSvsMC",
-"/net/hciserver03/storage/abailoni/python_libraries/affogato/python",
-]
-
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
-from h5py import highlevel
-import vigra
-import nifty as nf
-import nifty.graph.agglo as nagglo
-import numpy as np
 import os
-
-from skimage import io
-import argparse
-import time
-import yaml
-import json
-import h5py
-
-import getpass
-from PIL import Image
-
-
-from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
-from segmfriends.utils import yaml2dict, parse_data_slice
-
-from segmfriends.io.save import get_hci_home_path, get_trendytukan_drive_path
-from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
-from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
-from segmfriends.algorithms.blockwise import BlockWise
-
-from skunkworks.metrics.cremi_score import cremi_score
-from long_range_hc.postprocessing.pipelines import get_segmentation_pipeline
-
-from long_range_compare.load_datasets import get_dataset_data, get_dataset_offsets, CREMI_crop_slices, CREMI_sub_crops_slices, get_GMIS_dataset
-
-from long_range_compare import GMIS_utils as GMIS_utils
+from long_range_compare.data_paths import get_hci_home_path, get_trendytukan_drive_path
 
 
 from shutil import copyfile

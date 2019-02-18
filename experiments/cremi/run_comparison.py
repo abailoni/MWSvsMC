@@ -17,9 +17,9 @@ from long_range_compare.data_paths import get_hci_home_path
 from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
 from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
 from segmfriends.algorithms.blockwise import BlockWise
+from segmfriends.algorithms import get_segmentation_pipeline
 
 from skunkworks.metrics.cremi_score import cremi_score
-from long_range_hc.postprocessing.pipelines import get_segmentation_pipeline
 
 from long_range_compare.load_datasets import get_dataset_data, get_dataset_offsets, CREMI_crop_slices, CREMI_sub_crops_slices
 

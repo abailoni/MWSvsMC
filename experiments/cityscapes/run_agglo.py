@@ -3,21 +3,11 @@ import long_range_compare
 
 
 import vigra
-import nifty as nf
-import nifty.graph.agglo as nagglo
 import numpy as np
 import os
 
-from skimage import io
-import argparse
 import time
-import yaml
-import json
 import h5py
-
-import getpass
-from PIL import Image
-
 
 
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
@@ -29,7 +19,7 @@ from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
 from segmfriends.algorithms.blockwise import BlockWise
 
 from skunkworks.metrics.cremi_score import cremi_score
-from long_range_hc.postprocessing.pipelines import get_segmentation_pipeline
+from segmfriends.algorithms import get_segmentation_pipeline
 
 from long_range_compare.load_datasets import get_dataset_data, get_dataset_offsets, CREMI_crop_slices, CREMI_sub_crops_slices, get_GMIS_dataset
 
