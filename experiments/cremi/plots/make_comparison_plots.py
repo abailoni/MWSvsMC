@@ -1,32 +1,6 @@
-import sys
+import long_range_compare # Add missing package-paths
 
-sys.path += ["/home/abailoni_local/hci_home/python_libraries/nifty/python",
-"/home/abailoni_local/hci_home/python_libraries/cremi_python",
-"/home/abailoni_local/hci_home/python_libraries/affogato/python",
-"/home/abailoni_local/hci_home/pyCharm_projects/inferno",
-"/home/abailoni_local/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni_local/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni_local/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni_local/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni_local/hci_home/pyCharm_projects/neurofire",]
-
-sys.path += ["/home/abailoni/hci_home/python_libraries/nifty/python",
-"/home/abailoni/hci_home/python_libraries/cremi_python",
-"/home/abailoni/hci_home/python_libraries/affogato/python",
-"/home/abailoni/hci_home/pyCharm_projects/inferno",
-"/home/abailoni/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni/hci_home/pyCharm_projects/neurofire",]
-
-
-sys.path += [
-"/net/hciserver03/storage/abailoni/pyCharm_projects/hc_segmentation",
-"/net/hciserver03/storage/abailoni/python_libraries/affogato/python",
-]
-
-from segmfriends.io.save import get_hci_home_path
+from long_range_compare.data_paths import get_hci_home_path
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt

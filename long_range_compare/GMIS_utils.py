@@ -2,7 +2,7 @@ import numpy as np
 
 BACKGROUND_THRESHOLD = 0.3
 from nifty.graph import rag as nrag
-from segmfriends.io.save import get_hci_home_path, get_trendytukan_drive_path
+from .data_paths import get_hci_home_path, get_trendytukan_drive_path
 import os
 from segmfriends.io.load import parse_offsets
 

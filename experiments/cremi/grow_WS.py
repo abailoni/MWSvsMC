@@ -1,36 +1,7 @@
-import sys
-
-sys.path += ["/home/abailoni_local/hci_home/python_libraries/nifty/python",
-"/home/abailoni_local/hci_home/python_libraries/cremi_python",
-"/home/abailoni_local/hci_home/python_libraries/affogato/python",
-"/home/abailoni_local/hci_home/pyCharm_projects/inferno",
-"/home/abailoni_local/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni_local/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni_local/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni_local/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni_local/hci_home/pyCharm_projects/neurofire",]
-
-sys.path += ["/home/abailoni/hci_home/python_libraries/nifty/python",
-"/home/abailoni/hci_home/python_libraries/cremi_python",
-"/home/abailoni/hci_home/python_libraries/affogato/python",
-"/home/abailoni/hci_home/pyCharm_projects/inferno",
-"/home/abailoni/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni/hci_home/pyCharm_projects/neurofire",]
+# Add missing package-paths:
+import long_range_compare
 
 
-sys.path += [
-"/net/hciserver03/storage/abailoni/pyCharm_projects/hc_segmentation",
-"/net/hciserver03/storage/abailoni/python_libraries/affogato/python",
-]
-
-
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
-from h5py import highlevel
 import vigra
 import nifty as nf
 import nifty.graph.agglo as nagglo
@@ -51,7 +22,7 @@ import getpass
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict, parse_data_slice
 
-from segmfriends.io.save import get_hci_home_path
+from long_range_compare.data_paths import get_hci_home_path
 from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
 from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
 from segmfriends.algorithms.blockwise import BlockWise

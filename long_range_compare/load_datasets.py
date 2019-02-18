@@ -5,7 +5,7 @@ import os
 import h5py
 
 from segmfriends.utils import yaml2dict, parse_data_slice
-from segmfriends.io.save import get_hci_home_path, get_trendytukan_drive_path
+from .data_paths import get_hci_home_path, get_trendytukan_drive_path
 from segmfriends.io.load import parse_offsets
 
 def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_connected_components=True):

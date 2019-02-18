@@ -1,57 +1,19 @@
-import sys
-
-sys.path += ["/home/abailoni_local/hci_home/python_libraries/nifty/python",
-"/home/abailoni_local/hci_home/python_libraries/cremi_python",
-"/home/abailoni_local/hci_home/python_libraries/affogato/python",
-"/home/abailoni_local/hci_home/pyCharm_projects/inferno",
-"/home/abailoni_local/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni_local/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni_local/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni_local/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni_local/hci_home/pyCharm_projects/neurofire",]
-
-sys.path += ["/home/abailoni/hci_home/python_libraries/nifty/python",
-"/home/abailoni/hci_home/python_libraries/cremi_python",
-"/home/abailoni/hci_home/python_libraries/affogato/python",
-"/home/abailoni/hci_home/pyCharm_projects/inferno",
-"/home/abailoni/hci_home/pyCharm_projects/constrained_mst",
-"/home/abailoni/hci_home/pyCharm_projects/neuro-skunkworks",
-"/home/abailoni/hci_home/pyCharm_projects/segmfriends",
-"/home/abailoni/hci_home/pyCharm_projects/hc_segmentation",
-"/home/abailoni/hci_home/pyCharm_projects/neurofire",]
+import long_range_compare # Add missing package-paths
 
 
-sys.path += [
-"/net/hciserver03/storage/abailoni/pyCharm_projects/hc_segmentation",
-"/net/hciserver03/storage/abailoni/python_libraries/affogato/python",
-]
-
-
-import matplotlib
-matplotlib.use('Agg')
-from matplotlib import pyplot as plt
-from h5py import highlevel
 import vigra
-import nifty as nf
-import nifty.graph.agglo as nagglo
 import numpy as np
 import os
 
-from skimage import io
-import argparse
 import time
-import yaml
 import json
-import h5py
-
-import getpass
 
 
 
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict, parse_data_slice
 
-from segmfriends.io.save import get_hci_home_path
+from long_range_compare.data_paths import get_hci_home_path
 from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
 from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
 from segmfriends.algorithms.blockwise import BlockWise
@@ -268,9 +230,10 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
     # if max_affs > 1.0:
     #     affinities /= max_affs
 
+    config_path = os.path.join(get_hci_home_path(), "pyCharm_projects/longRangeAgglo/experiments/cremi/configs")
 
-    configs = {'models': yaml2dict('./experiments/models_config.yml'),
-               'postproc': yaml2dict('./experiments/post_proc_config.yml')}
+    configs = {'models': yaml2dict(os.path.join(config_path, 'models_config.yml')),
+               'postproc': yaml2dict(os.path.join(config_path, 'post_proc_config.yml'))}
     model_keys = [agglo] if not local_attraction else [agglo, "impose_local_attraction"]
     if from_superpixels:
         if use_multicut:
@@ -973,13 +936,124 @@ if __name__ == '__main__':
                                     all_GTs.append(all_GT_blocks[sample][crop][sub_crop])
                                     all_noise_factors.append(noise)
 
+
+    def debug():
+        global nb_threads_pool
+        global from_superpixels
+        global use_multicut
+        global add_smart_noise
+        global save_segm
+        global WS_growing
+        global additional_model_keys
+
+        nb_threads_pool = 1
+        from_superpixels = False
+        use_multicut = False
+        add_smart_noise = True
+        save_segm = False
+        WS_growing = True
+        LONG_RANGE_EDGE_PROBABILITY = 0.0
+        NOISE_FACTORS = [0.]
+        # additional_model_keys = ['smart_noise_exp_merge_only_local']
+        additional_model_keys = ['different_noise_shortEdges']
+        # additional_model_keys = ['smart_noise_exp_merge_allLong_fromSP']
+
+        # TODO: noise, save, crop
+        for _ in range(1):
+            # Generate noisy affinities:
+            print("Generating noisy affs...")
+            for crop in range(5, 6):  # Deep-z: 5       MC: 4   All: 0:4
+                for sub_crop in range(5, 6):  # Deep-z: 5     MC: 6  All: 4 Tiny: 5
+                    affinities, GT = get_dataset_data("CREMI", "B", CREMI_crop_slices["B"][crop],
+                                                      run_connected_components=False)
+                    temp_file = os.path.join(get_hci_home_path(), 'affs_plus_smart_noise.h5')
+
+                    sub_crop_slc = parse_data_slice(CREMI_sub_crops_slices[sub_crop])
+                    affinities = affinities[sub_crop_slc]
+                    GT = GT[sub_crop_slc[1:]]
+                    GT = vigra.analysis.labelVolumeWithBackground(GT.astype('uint32'))
+                    # affinities = add_epsilon(affinities)
+
+                    # from segmfriends import vis as vis
+                    # fig, ax = vis.get_figure(1, 1, hide_axes=True)
+                    #
+                    # vis.plot_segm(ax, GT, z_slice=15, background=None, mask_value=None, highlight_boundaries=True, plot_label_colors=True)
+                    #
+                    # fig.savefig(os.path.join(get_hci_home_path(), "GT_affs.pdf"))
+
+
+
+                    all_GT_blocks["B"][crop][sub_crop] = GT
+                    all_affinities_blocks["B"][crop][sub_crop] = {}
+                    for noise in NOISE_FACTORS:
+                        # all_affinities_blocks["B"][crop][sub_crop][noise] = np.copy(affinities)
+                        # all_affinities_blocks["B"][crop][sub_crop][noise] = vigra.readHDF5(temp_file,
+                        #                 '{:.4f}'.format(noise))
+                        all_affinities_blocks["B"][crop][sub_crop][noise] = add_smart_noise_to_affs(affinities,
+                                                                                                    scale_factor=noise,
+                                                                                                    mod='merge-bias',
+                                                                                                    target_affs='short')
+                        # vigra.writeHDF5(all_affinities_blocks["B"][crop][sub_crop][noise], temp_file, '{:.4f}'.format(noise))
+
+            print("Done!")
+            check = False
+            for sample in ["B"]:
+                # crop_range = {"A": range(3,4),
+                #               "B": range(0,1),
+                #               "C": range(2,3)}
+
+                # for crop in crop_range[sample]:  # Deep-z: 5       MC: 4   All: 0:4
+                for crop in range(5, 6):  # Deep-z: 5       MC: 4   All: 0:4
+                    for sub_crop in range(5, 6):  # Deep-z: 5     MC: 6  All: 4 Tiny: 5
+                        if all_affinities_blocks[sample][crop][sub_crop] is None:
+                            # Load data:
+                            affinities, GT = get_dataset_data("CREMI", sample, CREMI_crop_slices[sample][crop],
+                                                              run_connected_components=False)
+                            sub_crop_slc = parse_data_slice(CREMI_sub_crops_slices[sub_crop])
+                            affinities = affinities[sub_crop_slc]
+                            GT = GT[sub_crop_slc[1:]]
+                            GT = vigra.analysis.labelVolumeWithBackground(GT.astype('uint32'))
+                            affinities = add_epsilon(affinities)
+                            all_affinities_blocks[sample][crop][sub_crop] = affinities
+                            all_GT_blocks[sample][crop][sub_crop] = GT
+
+                        for local_attr in [False]:
+                            for agglo in ['MEAN']:
+                            # for agglo in ['MAX', 'greedyFixation', 'MEAN_constr', 'GAEC', 'MEAN']:
+                                # for agglo in ['MEAN_constr', 'MAX', 'MEAN']:
+                                # for agglo in ['MEAN', 'MAX', 'greedyFixation', 'GAEC', 'MEAN_constr']:
+                                # for agglo in ['MEAN', 'MAX', 'MEAN_constr']:
+                                if local_attr and agglo in ['greedyFixation', 'GAEC']:
+                                    continue
+                                for noise in NOISE_FACTORS:
+                                    # for noise_factor in [0.9]:
+                                    all_datasets.append('CREMI')
+                                    all_samples.append(sample)
+                                    all_crops.append(CREMI_crop_slices[sample][crop])
+                                    all_sub_crops.append(CREMI_sub_crops_slices[sub_crop])
+                                    all_local_attr.append(local_attr)
+                                    all_agglo_type.append(agglo)
+                                    all_edge_prob.append(LONG_RANGE_EDGE_PROBABILITY)
+                                    # saveUCM = True if edge_prob > 0.0999 and edge_prob < 0.1001 and agglo != 'MAX' else False
+                                    saveUCM = False
+                                    if saveUCM and not check:
+                                        print("UCM scheduled!")
+                                        check = True
+                                    all_UCM.append(saveUCM)
+                                    assert all_affinities_blocks[sample][crop][sub_crop] is not None
+                                    all_affinites.append(all_affinities_blocks[sample][crop][sub_crop][noise])
+                                    all_GTs.append(all_GT_blocks[sample][crop][sub_crop])
+                                    all_noise_factors.append(noise)
+
+
     print("Loading...")
     tick = time.time()
     # full_CREMI()
-    smart_noise_merge_only_local()
+    # smart_noise_merge_only_local()
 
     # smart_noise_merge_only_local()
     # smart_noise_split()
+    debug()
 
     print("Loaded dataset in {}s".format(time.time() - tick))
 
