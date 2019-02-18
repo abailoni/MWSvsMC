@@ -47,7 +47,6 @@ import h5py
 import getpass
 
 
-from long_range_compare import utils as utils
 
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict, parse_data_slice

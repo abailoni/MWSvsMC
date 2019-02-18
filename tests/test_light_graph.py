@@ -28,7 +28,6 @@ import json
 
 
 
-from long_range_compare import utils as utils
 
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict

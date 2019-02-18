@@ -24,7 +24,6 @@ import time
 import json
 
 
-from long_range_compare import utils as utils
 
 from segmfriends.utils.config_utils import adapt_configs_to_model
 from segmfriends.utils import yaml2dict
