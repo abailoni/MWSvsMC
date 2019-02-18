@@ -10,8 +10,8 @@ from skimage import io
 
 
 
-from compareMCandMWS import utils as utils
-from compareMCandMWS.divisiveMWS import DivisiveMWS
+from long_range_compare import utils as utils
+from long_range_compare.divisiveMWS import DivisiveMWS
 
 
 if __name__ == '__main__':

@@ -50,7 +50,7 @@ import getpass
 from PIL import Image
 
 
-from compareMCandMWS import utils as utils
+from long_range_compare import utils as utils
 
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict, parse_data_slice
@@ -63,9 +63,9 @@ from segmfriends.algorithms.blockwise import BlockWise
 from skunkworks.metrics.cremi_score import cremi_score
 from long_range_hc.postprocessing.pipelines import get_segmentation_pipeline
 
-from compareMCandMWS.load_datasets import get_dataset_data, get_dataset_offsets, CREMI_crop_slices, CREMI_sub_crops_slices, get_GMIS_dataset
+from long_range_compare.load_datasets import get_dataset_data, get_dataset_offsets, CREMI_crop_slices, CREMI_sub_crops_slices, get_GMIS_dataset
 
-from compareMCandMWS import GMIS_utils as GMIS_utils
+from long_range_compare import GMIS_utils as GMIS_utils
 
 
 # Add epsilon to affinities:
@@ -174,7 +174,6 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
             return np.transpose(boundary_affin, (1, 2, 3, 0))
 
 
-
     # RE-adjust affinities:
     def rescale_affs(affs, scale):
         p_min = scale
@@ -200,43 +199,88 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     affinities = np.expand_dims(combined_affs.reshape(combined_affs.shape[0], combined_affs.shape[1], -1), axis=0)
     affinities = np.rollaxis(affinities, axis=-1, start=0)
 
+    def distort_affs(affs):
+
+        affs = affs.copy()
+
+
+
+        def mod_affs(mod, slc, scale_factor=0.1):
+            if mod == 'merge-bias':
+                # ---------------------------------------
+                # Increase merges:
+                affs[slc] += (1 - (1 - affs[slc])) * scale_factor
+            elif mod == 'split-bias':
+                # ---------------------------------------
+                # Increase splits:
+                affs[slc] -= (1 - affs[slc]) * scale_factor
+
+        slc_short = slice(0, 16)
+        slc_middle = slice(16, 32)
+        slc_long = slice(32, 48)
+        mod_affs('split-bias', slc_short, scale_factor=0.2)
+        mod_affs('split-bias', slc_middle, scale_factor=0.08)
+        mod_affs('merge-bias', slc_long, scale_factor=0.06)
+
+        affs = np.clip(affs, 0., 1.)
+
+        # Add back some noise to the extremes:
+        # affs += np.random.normal(scale=0.00001, size=affs.shape)
+        # min_affs, max_affs = affs.min(), affs.max()
+        # if min_affs < 0:
+        #     affs -= min_affs
+        # if max_affs > 1.0:
+        #     affs /= max_affs
+
+        return affs
+
+    affinities = distort_affs(affinities)
+
+    # affinities += np.random.normal(scale=0.0001, size=affinities.shape)
+    # affinities -= affinities.min()
+    # affinities /= affinities.max()
+
+
     foreground_mask_affs = compute_real_background_mask(np.expand_dims(foreground_mask, axis=0), offsets, channel_affs=0)
 
     affinities *= foreground_mask_affs
+
+    # TODO: add noise, add offset_weights and thresh 0.3
 
     # fake_foreground = np.array([[[1, 1, 1], [1, 0, 1], [1, 1, 1], ]])
     # print(compute_real_background_mask(fake_foreground, offsets, channel_affs=0)[0], offsets[0])
 
 
     # # PLOTTING STUFF:
-    # affs_repr = GMIS_utils.get_affinities_representation(affinities[:16], offsets[:16])
-    # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
-    # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
-    # if affs_repr.min() < 0:
-    #     affs_repr += np.abs(affs_repr.min())
-    # affs_repr /= affs_repr.max()
-    # # if affs_repr.max() > 255.:
-    # #     affs_repr = affs_repr / affs_prob.max() * 255.
-    # # inst_result_image = Image.fromarray(affs_repr, mode='RGB')
-    # # # inst_result_image.putpalette(mask_palette)
-    # # inst_result_image.save(image_path.replace(
-    # #     '.input.h5', '.affs.png'))
     #
-    # from segmfriends import vis as vis
-    # fig, ax = vis.get_figure(1,1, False)
+    # if "frankfurt_000001_020693_leftImg8bit1_01" in image_path:
+    #     from segmfriends import vis as vis
+    #     for off_stride in [0,8,16,24,32,40]:
+    #         affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
+    #         # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
+    #         affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
+    #         if affs_repr.min() < 0:
+    #             affs_repr += np.abs(affs_repr.min())
+    #         affs_repr /= affs_repr.max()
     #
-    # # affs_repr = np.linalg.norm(affs_repr, axis=0, keepdims=True)
     #
-    # # ax.imshow(affs_repr, interpolation="none")
+    #         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    #         for a in fig.get_axes():
+    #             a.axis('off')
     #
-    # vis.plot_output_affin(ax, affinities, nb_offset=16, z_slice=0)
     #
-    # pdf_path = image_path.replace(
-    #     '.input.h5', '.affs__13.pdf')
-    # # fig.savefig(pdf_path)
-    # vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-
-
+    #         affs_repr = np.linalg.norm(affs_repr, axis=-1)
+    #         ax.imshow(affs_repr, interpolation="none")
+    #
+    #         # vis.plot_output_affin(ax, affinities, nb_offset=off_stride+3, z_slice=0)
+    #
+    #         pdf_path = image_path.replace(
+    #             '.input.h5', '.affs_{}.pdf'.format(off_stride))
+    #         # fig.savefig(pdf_path)
+    #         vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+    #         print(off_stride)
+    #
+    #
 
 
 
@@ -251,8 +295,18 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
             model_keys += ["gen_HC_DTWS"]
     configs = adapt_configs_to_model(model_keys, debug=False, **configs)
     post_proc_config = configs['postproc']
-    post_proc_config['generalized_HC_kwargs']['probability_long_range_edges'] = edge_prob
-    post_proc_config['generalized_HC_kwargs']['return_UCM'] = save_UCM
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_probabilities'] = edge_prob
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['return_UCM'] = save_UCM
+
+    # Add longRange weights:
+    offset_weights = np.ones_like(offsets[:,0])
+    offset_weights[:16] = 35
+    offset_weights[16:32] = 20
+    offset_weights[32:] = 1
+
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_weights'] = list(offset_weights)
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['extra_aggl_kwargs']['threshold'] = 0.25
+
 
     n_threads = post_proc_config.pop('nb_threads')
     invert_affinities = post_proc_config.pop('invert_affinities', False)
@@ -332,7 +386,7 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
         '.input.h5', '.inst.confidence.txt')
 
     # inner_path = agglo + "_" + str(local_attraction)
-    inner_path = agglo + "_bk_mask"
+    inner_path = agglo + "_prove_exp_distortAffs_exp2"
     # inner_path = "MEAN_bk_fixed"
     vigra.writeHDF5(pred_segm_WS[0].astype('uint16'), inst_out_file, inner_path)
     vigra.writeHDF5(confidence_scores, inst_out_conf_file, inner_path)
@@ -395,9 +449,9 @@ if __name__ == '__main__':
     for _ in range(1):
         for path in all_images_paths:
             for local_attr in [False]:
-                for agglo in ['MEAN', 'MAX']:
-                # for agglo in ['MEAN', 'MAX', 'greedyFixation', 'GAEC', 'MEAN_constr']:
-                # for agglo in ['MEAN', 'MAX', 'MEAN_constr']:
+                # for agglo in ['MEAN_constr']:
+                # for agglo in ['MAX']:
+                for agglo in ['MEAN_constr', 'MEAN']:
                     if local_attr and agglo in ['greedyFixation', 'GAEC']:
                         continue
                     # for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 17), np.linspace(0.11, 0.8, 18))):

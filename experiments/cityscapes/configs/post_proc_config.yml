@@ -1,11 +1,11 @@
 segm_pipeline_type: 'gen_HC'
-nb_threads: 8
+nb_threads: 3
 invert_affinities: False
 blockwise: False
 #return_fragments: False
 use_final_agglomerater: False
 stacking_2D: False
-thresh_segm_size: 40
+thresh_segm_size: 256
 
 blockwise_kwargs:
   crop_padding: True
@@ -56,12 +56,15 @@ multicut_kwargs:
 
 generalized_HC_kwargs:
 
-#  nb_local_offsets: 3
-  probability_long_range_edges: 0.08
 
   agglomeration_kwargs:
-    nb_merge_offsets: 17
-    max_distance_lifted_edges: 1
+    offsets_probabilities: 1.0 # Probs. for long-range edges
+#    strides: [1,2,2]
+    return_UCM: False
+
+#    nb_merge_offsets: 8
+    nb_merge_offsets: 48
+    debug: False
 #    offsets_weights: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 #    offsets_weights: [1., 1., 1., 2., 3, 3, 3, 9, 9, 4, 27, 27]
 #    offsets_weights: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3]

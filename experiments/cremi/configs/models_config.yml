@@ -136,7 +136,68 @@ greedyFixation:
 #        verbose: True
 #        printNth: 1000000
 
+smart_noise_exp_merge_allLong_fromSP:
+  postproc:
+    experiment_name: 'local_merge_noise_exp1'
 
+
+
+
+smart_noise_exp_merge_only_local:
+  postproc:
+    experiment_name: 'NEW_merge_noise_exp_onlyShort_fromPixels'
+
+
+smart_noise_exp_merge:
+  postproc:
+    experiment_name: 'NEW_merge_noise_exp_008longEdges_fromPixels'
+
+smart_noise_exp_merge_allLong_fromPx:
+  postproc:
+    experiment_name: 'NEW_merge_noise_exp_allLongRange_fromPixels'
+
+smart_noise_exp_merge_allLong_fromSP:
+  postproc:
+    experiment_name: 'NEW_merge_noise_exp_allLongRange_fromSP'
+
+smart_noise_split_fewEdges:
+  postproc:
+    experiment_name: 'local_split_noise_exp_fewEdges'
+
+
+different_noise_fewEdges:
+  postproc:
+    experiment_name: 'different_merge_noise_exp_008longEdges_fromPixels'
+
+different_noise_shortEdges:
+  postproc:
+    experiment_name: 'different_merge_noise_exp_shortEdges_fromPixels'
+
+
+smart_noise_split_allEdges:
+  postproc:
+    experiment_name: 'local_split_noise_exp_allEdges'
+
+smart_noise_split_onlyShort_fromPix:
+  postproc:
+    experiment_name: 'local_split_noise_exp_shortEdges'
+
+smart_noise_split_allEdges_fromPix:
+  postproc:
+    experiment_name: 'split_noise_exp_allEdges_fromPix'
+
+
+fullCREMIexp:
+  postproc:
+    experiment_name: 'full_cremi'
+
+fullCREMIexp_MC:
+  postproc:
+    experiment_name: 'full_cremi_MC'
+
+fullCREMIexp_standardHC:
+  postproc:
+    experiment_name: 'full_cremi_standardHC_onlyShort'
 
 gen_HC_DTWS:
   parent_model: ['gen_HC']

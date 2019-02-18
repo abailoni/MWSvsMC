@@ -7,9 +7,9 @@ import numpy as np
 import os
 import matplotlib.ticker
 
-from compareMCandMWS import utils as utils
-from compareMCandMWS.multicut_solvers import solve_multicut
-from compareMCandMWS.MWS import MWS
+from long_range_compare import utils as utils
+from long_range_compare.multicut_solvers import solve_multicut
+from long_range_compare.MWS import MWS
 import argparse
 
 

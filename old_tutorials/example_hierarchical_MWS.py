@@ -13,8 +13,8 @@ from skimage import io
 
 
 
-from compareMCandMWS import utils as utils
-from compareMCandMWS.MWS import MWS
+from long_range_compare import utils as utils
+from long_range_compare.MWS import MWS
 
 
 if __name__ == '__main__':

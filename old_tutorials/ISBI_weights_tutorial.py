@@ -2,7 +2,7 @@ import nifty
 import numpy as np
 import vigra
 
-from compareMCandMWS.utils import probs_to_costs
+from long_range_compare.utils import probs_to_costs
 
 dataset_path = "/net/hciserver03/storage/abailoni/datasets/ISBI/isbi_results_MWS/isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"
 

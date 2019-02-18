@@ -1,11 +1,11 @@
 segm_pipeline_type: 'gen_HC'
-nb_threads: 8
+nb_threads: 5
 invert_affinities: False
 blockwise: False
 #return_fragments: False
 use_final_agglomerater: False
 stacking_2D: False
-thresh_segm_size: 120
+thresh_segm_size: 200
 
 blockwise_kwargs:
   crop_padding: True
@@ -45,25 +45,27 @@ multicut_kwargs:
 #  time_limit: 120
   weight: 16.
   verbose_visitNth: 100
-  max_distance_lifted_edges: 1
+  offsets_probabilities: 1.0
 #  offsets_weights: [1., 1., 1.,
 #                      1., 1., 1., 1.,
 #                      9., 9., 9., 9., 9., 9., 9., 9.,
 #                      27., 27.]
 #  used_offsets: [0,1,2]
 
-
+use_lifted_edges: True
+combine_SP_and_pixels: True
 
 generalized_HC_kwargs:
 
-
-  probability_long_range_edges: 1.0
+#  nb_local_offsets: 3
 
   agglomeration_kwargs:
-#    nb_merge_offsets: 8
-    nb_merge_offsets: 48
+    offsets_probabilities: 1.0 # Probs. for long-range edges
+#    strides: [1,2,2]
+    return_UCM: False
+
+#    nb_merge_offsets: 17
     debug: False
-    max_distance_lifted_edges: 1
 #    offsets_weights: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 #    offsets_weights: [1., 1., 1., 2., 3, 3, 3, 9, 9, 4, 27, 27]
 #    offsets_weights: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3]
@@ -95,10 +97,10 @@ generalized_HC_kwargs:
 #      sizeThreshMin: 0.
 #      sizeThresMax: 120.
 #      postponeThresholding: False
-      threshold: 0.50 # Merge all: 0.0; split all: 1.0
+      threshold: 0.5 # Merge all: 0.0; split all: 1.0
     extra_runAggl_kwargs:
       verbose: True
-      printNth: 100000
+      printNth: 1000000
 
   final_agglomeration_kwargs:
     zero_init: False
@@ -131,7 +133,7 @@ generalized_HC_kwargs:
       threshold: 0.5 # Merge all: 0.0; split all: 1.0
     extra_runAggl_kwargs:
       verbose: True
-      printNth: 100000
+      printNth: 500000
 
 
 volume_config:
