@@ -79,58 +79,6 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     # foreground_mask_affs = np.tile(foreground_mask, reps=(combined_affs.shape[2], combined_affs.shape[3], 1, 1))
     # foreground_mask_affs = np.transpose(foreground_mask_affs, (2, 3, 0, 1))
 
-    def compute_real_background_mask(foreground_mask,
-                                offsets,
-                                compress_channels=False,
-                                channel_affs=-1):
-        """
-        Faster than the nifty version, but does not check the actual connectivity of the segments (no rag is
-        built). A non-local edge could be cut, but it could also connect not-neighboring segments.
-    b
-        It returns a boundary mask (1 on boundaries, 0 otherwise). To get affinities reverse it.
-
-        :param offsets: numpy array
-            Example: [ [0,1,0], [0,0,1] ]
-
-        :param return_boundary_affinities:
-            if True, the output shape is (len(axes, z, x, y)
-            if False, the shape is       (z, x, y)
-
-        :param channel_affs: accepted options are 0 or -1
-        """
-        # TODO: use the version already implemented in the trasformations and using convolution kernels
-        assert foreground_mask.ndim == 3
-        ndim = 3
-
-        padding = [[0, 0] for _ in range(3)]
-        for ax in range(3):
-            padding[ax][1] = offsets[:, ax].max()
-
-        padded_foreground_mask= np.pad(foreground_mask, pad_width=padding, mode='constant', constant_values=True)
-        crop_slices = [slice(0, padded_foreground_mask.shape[ax] - padding[ax][1]) for ax in range(3)]
-
-        boundary_mask = []
-        for offset in offsets:
-            rolled_segm = padded_foreground_mask
-            for ax, offset_ax in enumerate(offset):
-                if offset_ax != 0:
-                    rolled_segm = np.roll(rolled_segm, -offset_ax, axis=ax)
-            boundary_mask.append((np.logical_and(padded_foreground_mask, rolled_segm))[crop_slices])
-
-        boundary_affin = np.stack(boundary_mask)
-
-        if compress_channels:
-            compressed_mask = np.zeros(foreground_mask.shape[:ndim], dtype=np.int8)
-            for ch_nb in range(boundary_affin.shape[0]):
-                compressed_mask = np.logical_or(compressed_mask, boundary_affin[ch_nb])
-            return compressed_mask
-
-        if channel_affs == 0:
-            return boundary_affin
-        else:
-            assert channel_affs == -1
-            return np.transpose(boundary_affin, (1, 2, 3, 0))
-
 
     # RE-adjust affinities:
     def rescale_affs(affs, scale):
@@ -199,7 +147,7 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     # affinities /= affinities.max()
 
 
-    foreground_mask_affs = compute_real_background_mask(np.expand_dims(foreground_mask, axis=0), offsets, channel_affs=0)
+    foreground_mask_affs = GMIS_utils.compute_real_background_mask(np.expand_dims(foreground_mask, axis=0), offsets, channel_affs=0)
 
     affinities *= foreground_mask_affs
 
