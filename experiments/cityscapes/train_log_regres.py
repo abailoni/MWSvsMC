@@ -11,6 +11,7 @@ import h5py
 
 
 from segmfriends.utils import yaml2dict, parse_data_slice
+from long_range_compare.data_paths import get_trendytukan_drive_path
 
 import matplotlib.pyplot as plt
 
@@ -30,10 +31,15 @@ from inferno.extensions.criteria.set_similarity_measures import SorensenDiceLoss
 class LogisticRegression(nn.Module):
     def __init__(self, input_size, num_classes):
         super(LogisticRegression, self).__init__()
-        self.linear = nn.Linear(input_size, num_classes)
+        self.linear1 = nn.Linear(input_size, input_size)
+        self.linear2 = nn.Linear(input_size, input_size)
+        self.linear3 = nn.Linear(input_size, num_classes)
+        self.activation = nn.ELU()
 
     def forward(self, x):
-        out = self.linear(x)
+        l1 = self.activation(self.linear1(x))
+        l2 = self.activation(self.linear2(l1))
+        out = self.linear3(l2)
         return out
 
 
@@ -126,7 +132,7 @@ def get_training_data(image_path):
     #     # fig.savefig(pdf_path)
     #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
 
-    return affs_var, GT_var, GT_mask_var, is_only_background
+    return affs_var, GT_var, GT_mask_var, is_only_background, foreground_mask_affs
 
 
 
@@ -139,54 +145,83 @@ def get_training_data(image_path):
 
 if __name__ == '__main__':
     # Hyper Parameters
-    input_size = 1
-    output_size = 1
-    num_epochs = 2
+    input_size = 48
+    output_size = 48
+    num_epochs = 10
+    learning_rate = 0.001
     learning_rate = 0.005
 
-    training_ratio = 0.6
+    training_ratio = 0.85
 
 
 
-    all_images_paths = get_GMIS_dataset(partial=True)
+    all_images_paths = get_GMIS_dataset()
     print("Number of ROIs: ", len(all_images_paths))
     nb_images_in_training = int(len(all_images_paths) * training_ratio)
     print("Training ROIs: ", nb_images_in_training)
 
-    model = LogisticRegression(input_size, output_size)
+
+    model_path = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/logistic_regression_model/pyT_model.pkl")
+    if os.path.exists(model_path):
+        print("Model loaded from file!")
+        model = torch.load(model_path)
+    else:
+        model = LogisticRegression(input_size, output_size)
 
     # Loss and Optimizer
     # Softmax is internally computed.
     # Set parameters to be updated.
-    criterion = nn.BCEWithLogitsLoss(reduction='none')
+    # criterion = nn.BCEWithLogitsLoss(reduction='none')
+
+    criterion = SorensenDiceLoss()
+
     # TODO: choose optimizer and learning rate
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.0005)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     model.to(device)
 
-    # Training the Model
-    for epoch in range(num_epochs):
-        for i, image_path in enumerate(all_images_paths[:nb_images_in_training]):
-
-            affs_var, GT_var, GT_mask_var, is_only_background = get_training_data(image_path)
+    sigmoid = nn.Sigmoid().to(device)
 
 
-            if not is_only_background:
-                # Forward + Backward + Optimize
-                affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
-
-                optimizer.zero_grad()
-                outputs = model(affs_var.unsqueeze(4)).squeeze(4)
-                loss = criterion(outputs, GT_var)
-                loss = (loss * GT_mask_var).sum() / GT_mask_var.sum()
-                loss.backward()
-                optimizer.step()
-
-                if (i + 1) % 5 == 0:
-                    print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
-                      % (epoch + 1, num_epochs, i + 1, len(all_images_paths), loss.cpu().data[0]))
+    # # Training the Model
+    # for epoch in range(num_epochs):
+    #     i = 0
+    #     for image_path in all_images_paths[:nb_images_in_training]:
+    #
+    #         affs_var, GT_var, GT_mask_var, is_only_background = get_training_data(image_path)
+    #
+    #
+    #         if not is_only_background:
+    #             # Forward + Backward + Optimize
+    #             affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
+    #             GT_var = (1. - GT_var) * GT_mask_var
+    #             if GT_var.sum().cpu().data == 0:
+    #                 continue
+    #
+    #
+    #             optimizer.zero_grad()
+    #             # outputs = sigmoid(model(affs_var.unsqueeze(4)).squeeze(4))
+    #             outputs = sigmoid(model(affs_var))
+    #
+    #             # # Compute DICE loss:
+    #             outputs = (1. - outputs) * GT_mask_var
+    #
+    #             loss = criterion(outputs.permute(3,0,1,2).unsqueeze(0), GT_var.permute(3,0,1,2).unsqueeze(0))
+    #
+    #
+    #             #     print(outputs.cpu().max())
+    #             #     print(GT_var.cpu().max())
+    #
+    #             loss.backward()
+    #             optimizer.step()
+    #
+    #             if (i + 1) % 30 == 0:
+    #                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
+    #                   % (epoch + 1, num_epochs, i + 1, len(all_images_paths[:nb_images_in_training]), loss.cpu().data))
+    #             i += 1
 
 
     # Test the Model
@@ -197,22 +232,25 @@ if __name__ == '__main__':
     OLD_found_boundaries = None
     OLD_true_found_boundaries = None
 
+    # TODO: re-apply foreground-masking and combine with semantic!
 
-    sigmoid = nn.Sigmoid().to(device)
-
-    for i, image_path in enumerate(all_images_paths[nb_images_in_training:]):
-        affs_var, GT_var, GT_mask_var, is_only_background = get_training_data(image_path)
+    i = 0
+    for image_path in all_images_paths[nb_images_in_training:]:
+    # for i, image_path in enumerate(["/home/abailoni_local/trendyTukan_localdata0/GMIS_predictions/temp_ram/frankfurt/frankfurt_000001_010444_leftImg8bit0_01.input.h5"]):
+        affs_var, GT_var, GT_mask_var, is_only_background, foreground_mask_affs = get_training_data(image_path)
         if not is_only_background:
+            i += 1
             # Forward + Backward + Optimize
             affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
 
             # TODO: should I take care of something...?
-            outputs = model(affs_var.unsqueeze(4)).squeeze(4)
+            # outputs = model(affs_var.unsqueeze(4)).squeeze(4)
+            outputs = model(affs_var)
 
-            # # Compute loss:
-            loss = criterion(outputs, GT_var)
-            # loss = (loss * GT_mask_var).sum() / GT_mask_var.sum()
-            loss = (loss * GT_mask_var)
+            # # # Compute DICE loss:
+            # loss = criterion(outputs.unsqueeze(0), GT_var.unsqueeze(0))
+            # # loss = (loss * GT_mask_var).sum() / GT_mask_var.sum()
+            # loss = (loss * GT_mask_var)
 
             # Compute precision and recall:
             nb_offsets = affs_var.size()[-1]
@@ -222,36 +260,38 @@ if __name__ == '__main__':
             new_predictions = (((1. - sigmoid(outputs)) * GT_mask_var) > 0.5).view(-1, nb_offsets)
             targets = ( ((1. - GT_var) * GT_mask_var) > 0.5).view(-1, nb_offsets)
 
-            from segmfriends import vis as vis
-            # np_predictions = sigmoid(outputs).cpu().data.numpy()
-            np_predictions = loss.cpu().data.numpy()
-            np_predictions = (affs_var * GT_mask_var).cpu().data.numpy()
-            for off_stride in [16, 32]:
-                fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-                for a in fig.get_axes():
-                    a.axis('off')
-                vis.plot_output_affin(ax, np.rollaxis(np_predictions, axis=-1, start=0), nb_offset=off_stride+3, z_slice=0)
-                pdf_path = "./GT_affs_{}.pdf".format(off_stride)
-                vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+            if i%30 == 0:
+                print("Valid: {}/{}...".format(i, len(all_images_paths)-nb_images_in_training))
+                from segmfriends import vis as vis
+                # np_predictions = sigmoid(outputs).cpu().data.numpy()
+                # np_predictions = loss.cpu().data.numpy()
+                np_predictions = np.rollaxis((affs_var ).cpu().data.numpy(), axis=-1, start=0) * foreground_mask_affs
+                for off_stride in [0, 8, 16, 24, 32]:
+                    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+                    for a in fig.get_axes():
+                        a.axis('off')
+                    vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
+                    pdf_path = "./val_plots/{}_GT_affs_{}_orig.pdf".format(i, off_stride)
+                    vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
 
-            np_predictions = (sigmoid(outputs)* GT_mask_var).cpu().data.numpy()
-            for off_stride in [16, 32]:
-                fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-                for a in fig.get_axes():
-                    a.axis('off')
-                vis.plot_output_affin(ax, np.rollaxis(np_predictions, axis=-1, start=0), nb_offset=off_stride+3, z_slice=0)
-                pdf_path = "./GT_affs_{}_B.pdf".format(off_stride)
-                vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+                np_predictions = np.rollaxis((sigmoid(outputs) ).cpu().data.numpy(), axis=-1, start=0) * foreground_mask_affs
+                for off_stride in [0, 8, 16, 24, 32]:
+                    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+                    for a in fig.get_axes():
+                        a.axis('off')
+                    vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
+                    pdf_path = "./val_plots/{}_GT_affs_{}_new.pdf".format(i, off_stride)
+                    vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
 
-            np_predictions = (GT_var * GT_mask_var).cpu().data.numpy()
-            for off_stride in [16, 32]:
-                fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-                for a in fig.get_axes():
-                    a.axis('off')
-                vis.plot_output_affin(ax, np.rollaxis(np_predictions, axis=-1, start=0), nb_offset=off_stride + 3,
-                                      z_slice=0)
-                pdf_path = "./GT_affs_{}_C.pdf".format(off_stride)
-                vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+                np_predictions = (GT_var * GT_mask_var).cpu().data.numpy()
+                for off_stride in [0, 8, 16, 24, 32]:
+                    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+                    for a in fig.get_axes():
+                        a.axis('off')
+                    vis.plot_output_affin(ax, np.rollaxis(np_predictions, axis=-1, start=0), nb_offset=off_stride + 3,
+                                          z_slice=0)
+                    pdf_path = "./val_plots/{}_GT_affs_{}_gt.pdf".format(i, off_stride)
+                    vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
 
             last_true_boundaries = targets.sum(dim=0)
 
@@ -274,7 +314,6 @@ if __name__ == '__main__':
                 OLD_found_boundaries += last_old_found_boundaries
                 OLD_true_found_boundaries += last_old_true_found_boundaries
 
-            break
 
     print("New Precision: {}".format(NEW_true_found_boundaries.data.float() / NEW_found_boundaries.data.float()))
     print("New Recall: {}".format(NEW_true_found_boundaries.data.float() / true_boundaries.data.float()))
@@ -282,5 +321,4 @@ if __name__ == '__main__':
     print("Old Precision: {}".format(OLD_true_found_boundaries.data.float() / OLD_found_boundaries.data.float()))
     print("Old Recall: {}".format(OLD_true_found_boundaries.data.float() / true_boundaries.data.float()))
 
-
-
+    torch.save(model, model_path)
