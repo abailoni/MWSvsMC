@@ -25,22 +25,25 @@ import torchvision.datasets as dsets
 import torchvision.transforms as transforms
 from torch.autograd import Variable
 
+from segmfriends.transform.segm_to_bound import compute_boundary_mask_from_label_image
+
 from inferno.extensions.criteria.set_similarity_measures import SorensenDiceLoss
 
 # Model
 class LogisticRegression(nn.Module):
-    def __init__(self, input_size, num_classes):
+    def __init__(self, input_size, output_size):
+        # TODO: add batchnorm? So far I used batch_size = 1
         super(LogisticRegression, self).__init__()
         self.linear1 = nn.Linear(input_size, input_size)
-        self.linear2 = nn.Linear(input_size, input_size)
-        self.linear3 = nn.Linear(input_size, num_classes)
+        self.linear2 = nn.Linear(input_size, output_size)
         self.activation = nn.ELU()
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         l1 = self.activation(self.linear1(x))
-        l2 = self.activation(self.linear2(l1))
-        out = self.linear3(l2)
-        return out
+        out = self.linear2(l1)
+        return self.sigmoid(out)
+
 
 
 
@@ -49,21 +52,17 @@ def get_training_data(image_path):
     # Load data:
     with h5py.File(image_path, 'r') as f:
         shape = f['shape'][:]
-        strides = f['strides'][:]
-        affs_prob = f['probs'][:]
-        class_prob = f['class_probs'][:]
+        strides = f['offset_ranges'][:]
+        affs_prob = f['instance_affinities'][:]
+        class_prob = f['semantic_affinities'][:]
         class_mask = f['semantic_argmax'][:]
-        GT_instances = f['gt_instances'][:]
-        # affs_prob = f['real_affs'][:]
+        GT_instances = f['instance_gt'][:]
 
 
-    # TODO: real_affs, combine, foreground
+    offsets = GMIS_utils.get_offsets(strides)
     # -----------------------------------
     # Pre-process affinities:
     # -----------------------------------
-    strides = np.array([1, 2, 4, 8, 16, 32], dtype=np.int32)
-    offsets = GMIS_utils.get_offsets(strides)
-
     # combined_affs = affs_prob
     combined_affs = GMIS_utils.combine_affs_with_class(affs_prob, class_prob, refine_bike=True, class_mask=class_mask)
 
@@ -73,22 +72,32 @@ def get_training_data(image_path):
     affinities = np.expand_dims(combined_affs.reshape(combined_affs.shape[0], combined_affs.shape[1], -1), axis=0)
     affinities = np.rollaxis(affinities, axis=-1, start=0)
 
-    foreground_mask_affs = GMIS_utils.compute_real_background_mask(np.expand_dims(foreground_mask, axis=0), offsets, channel_affs=0)
+    foreground_mask_affs = compute_boundary_mask_from_label_image(np.expand_dims(foreground_mask, axis=0),
+                                                                             offsets, channel_affs=0,
+                                                                             pad_mode='constant',
+                                                                             pad_constant_values=False,
+                                                                             background_value=False)
     affinities *= foreground_mask_affs
 
     # -----------------------------------
     # Get GT-instance-affinities:
     # -----------------------------------
     GT_instances = np.expand_dims(GT_instances, axis=0)
-    foreground_GT_affs = GMIS_utils.compute_real_background_mask(GT_instances != 0, offsets,
-                                                        channel_affs=0)
-    from segmfriends.transform.segm_to_bound import compute_mask_boundaries
-    GT_affs = np.logical_not(compute_mask_boundaries(GT_instances, offsets, channel_affs=0))
+    GT_affs = np.logical_not(compute_boundary_mask_from_label_image(GT_instances, offsets, channel_affs=0))
 
-    real_bundaries = np.logical_and(np.logical_not(GT_affs), foreground_GT_affs)
-    real_inner_parts = np.logical_and(GT_affs, foreground_GT_affs)
+    # Find edge-mask (False if any of the two pixels includes a GT-background label):
+    # we use it to mask the Dice Loss (so we focus the training only on boundaries between instances and not between
+    # pixels connected to the background)
+    foreground_GT_affs = compute_boundary_mask_from_label_image(GT_instances != 0, offsets,
+                                                                           channel_affs=0, pad_mode='constant',
+                                                                           pad_constant_values=False,
+                                                                           background_value=False)
 
-    # Consider also estimated background:
+    # real_boundaries = np.logical_and(np.logical_not(GT_affs), foreground_GT_affs)
+    # real_inner_parts = np.logical_and(GT_affs, foreground_GT_affs)
+
+    # Pixels connected to the background estimated by GMIS according to the semantic output will be also
+    # automatically zeroed. So it does not make sense to give loss on these affinities:
     foreground_GT_affs *= foreground_mask_affs
 
     # -----------------------------------
@@ -132,36 +141,28 @@ def get_training_data(image_path):
     #     # fig.savefig(pdf_path)
     #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
 
-    return affs_var, GT_var, GT_mask_var, is_only_background, foreground_mask_affs
-
-
-
-
-
-
-
-
+    return affs_var, GT_var, GT_mask_var, is_only_background
 
 
 if __name__ == '__main__':
     # Hyper Parameters
     input_size = 48
     output_size = 48
-    num_epochs = 10
+    num_epochs = 2
     learning_rate = 0.001
     learning_rate = 0.005
 
-    training_ratio = 0.85
+    training_ratio = 1.
 
 
 
-    all_images_paths = get_GMIS_dataset()
+    all_images_paths = get_GMIS_dataset(partial=False, type="train")
     print("Number of ROIs: ", len(all_images_paths))
     nb_images_in_training = int(len(all_images_paths) * training_ratio)
     print("Training ROIs: ", nb_images_in_training)
 
 
-    model_path = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/logistic_regression_model/pyT_model.pkl")
+    model_path = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/logistic_regression_model/pyT_model_train.pkl")
     if os.path.exists(model_path):
         print("Model loaded from file!")
         model = torch.load(model_path)
@@ -175,7 +176,6 @@ if __name__ == '__main__':
 
     criterion = SorensenDiceLoss()
 
-    # TODO: choose optimizer and learning rate
     # optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.0005)
 
@@ -183,142 +183,161 @@ if __name__ == '__main__':
 
     model.to(device)
 
+
+    # TODO: increase batch size! (if it is possible, sizewise...)
+
     sigmoid = nn.Sigmoid().to(device)
-
-
-    # # Training the Model
-    # for epoch in range(num_epochs):
-    #     i = 0
-    #     for image_path in all_images_paths[:nb_images_in_training]:
-    #
-    #         affs_var, GT_var, GT_mask_var, is_only_background = get_training_data(image_path)
     #
     #
-    #         if not is_only_background:
-    #             # Forward + Backward + Optimize
-    #             affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
-    #             GT_var = (1. - GT_var) * GT_mask_var
-    #             if GT_var.sum().cpu().data == 0:
-    #                 continue
+    # Training the Model
+    for epoch in range(num_epochs):
+        i = 0
+        for image_path in all_images_paths[:nb_images_in_training]:
+
+            affs_var, GT_var, GT_mask_var, is_only_background = get_training_data(image_path)
+
+
+            if not is_only_background:
+                # Forward + Backward + Optimize
+                affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
+                GT_var = (1. - GT_var) * GT_mask_var
+                if GT_var.sum().cpu().data == 0:
+                    continue
+
+
+                optimizer.zero_grad()
+                # outputs = sigmoid(model(affs_var.unsqueeze(4)).squeeze(4))
+                outputs = sigmoid(model(affs_var))
+
+                # # Compute DICE loss:
+                outputs = (1. - outputs) * GT_mask_var
+
+                loss = criterion(outputs.permute(3,0,1,2).unsqueeze(0), GT_var.permute(3,0,1,2).unsqueeze(0))
+
+
+                #     print(outputs.cpu().max())
+                #     print(GT_var.cpu().max())
+
+                loss.backward()
+                optimizer.step()
+
+                if (i + 1) % 30 == 0:
+                    print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
+                      % (epoch + 1, num_epochs, i + 1, len(all_images_paths[:nb_images_in_training]), loss.cpu().data))
+                i += 1
     #
     #
-    #             optimizer.zero_grad()
-    #             # outputs = sigmoid(model(affs_var.unsqueeze(4)).squeeze(4))
-    #             outputs = sigmoid(model(affs_var))
+    # # Test the Model
+    # true_boundaries = None
     #
-    #             # # Compute DICE loss:
-    #             outputs = (1. - outputs) * GT_mask_var
+    # NEW_found_boundaries = None
+    # NEW_true_found_boundaries = None
+    # OLD_found_boundaries = None
+    # OLD_true_found_boundaries = None
     #
-    #             loss = criterion(outputs.permute(3,0,1,2).unsqueeze(0), GT_var.permute(3,0,1,2).unsqueeze(0))
+    # # TODO: re-apply sem-foreground-masking and combine with semantic!
+    # # TODO: re-train without masking semantic-foreground in GT
+    #
+    # i = 0
+    # # for image_path in all_images_paths[nb_images_in_training:]:
+    # for image_path in all_images_paths:
+    # # for i, image_path in enumerate(["/home/abailoni_local/trendyTukan_localdata0/GMIS_predictions/temp_ram/frankfurt/frankfurt_000001_010444_leftImg8bit0_01.input.h5"]):
+    #     affs_var, GT_var, GT_mask_var, is_only_background, foreground_mask_affs = get_training_data(image_path)
+    #     i += 1
+    #     # Forward + Backward + Optimize
+    #     affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
+    #
+    #     # TODO: should I take care of something...?
+    #     # outputs = model(affs_var.unsqueeze(4)).squeeze(4)
+    #     outputs = model(affs_var)
+    #
+    #     # # # Compute DICE loss:
+    #     # loss = criterion(outputs.unsqueeze(0), GT_var.unsqueeze(0))
+    #     # # loss = (loss * GT_mask_var).sum() / GT_mask_var.sum()
+    #     # loss = (loss * GT_mask_var)
+    #
+    #     # Compute precision and recall:
+    #     nb_offsets = affs_var.size()[-1]
+    #
+    #     new_affs = (sigmoid(outputs)).cpu().data.numpy()
+    #
+    #     # # Reshape them in the original form:
+    #     # current_shape = new_affs.shape
+    #     # new_affs = new_affs[0].reshape(current_shape[1], current_shape[2], 6, 8)
+    #     # with h5py.File(image_path, 'r+') as f:
+    #     #     if 'balanced_affs' in f:
+    #     #         del f['balanced_affs']
+    #     #     f['balanced_affs'] = new_affs.astype('float16')
+    #
+    #     # if i % 50 == 0:
+    #     #     print('{}, '.format(i), end = '', flush=True)
+    #     #     # print('{}, '.format(i))
+    #
+    #     old_predictions = (((1. - affs_var) * GT_mask_var) > 0.5).view(-1, nb_offsets)
+    #     new_predictions = (((1. - sigmoid(outputs)) * GT_mask_var) > 0.5).view(-1, nb_offsets)
+    #     targets = ( ((1. - GT_var) * GT_mask_var) > 0.5).view(-1, nb_offsets)
+    #
+    #     # if i%30 == 0:
+    #     if True:
+    #         print("Valid: {}/{}...".format(i, len(all_images_paths)-nb_images_in_training))
+    #         from segmfriends import vis as vis
+    #         # np_predictions = sigmoid(outputs).cpu().data.numpy()
+    #         # np_predictions = loss.cpu().data.numpy()
+    #         np_predictions = np.rollaxis((affs_var ).cpu().data.numpy(), axis=-1, start=0)
+    #         for off_stride in [0, 8, 16, 24, 32]:
+    #             fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    #             for a in fig.get_axes():
+    #                 a.axis('off')
+    #             vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
+    #             pdf_path = "./val_plots/{}_GT_affs_{}_orig_B.pdf".format(i, off_stride)
+    #             vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+    #
+    #         np_predictions = np.rollaxis((sigmoid(outputs) ).cpu().data.numpy(), axis=-1, start=0)
+    #         for off_stride in [0, 8, 16, 24, 32]:
+    #             fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    #             for a in fig.get_axes():
+    #                 a.axis('off')
+    #             vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
+    #             pdf_path = "./val_plots/{}_GT_affs_{}_new_B.pdf".format(i, off_stride)
+    #             vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+    #
+    #         np_predictions = (GT_var * GT_mask_var).cpu().data.numpy()
+    #         for off_stride in [0, 8, 16, 24, 32]:
+    #             fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    #             for a in fig.get_axes():
+    #                 a.axis('off')
+    #             vis.plot_output_affin(ax, np.rollaxis(np_predictions, axis=-1, start=0), nb_offset=off_stride + 3,
+    #                                   z_slice=0)
+    #             pdf_path = "./val_plots/{}_GT_affs_{}_gt_B.pdf".format(i, off_stride)
+    #             vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+    #
+    #     break
+    #     last_true_boundaries = targets.sum(dim=0)
+    #
+    #     last_new_found_boundaries = new_predictions.sum(dim=0)
+    #     last_new_true_found_boundaries = ( new_predictions * targets ).sum(dim=0)
+    #
+    #     last_old_found_boundaries = old_predictions.sum(dim=0)
+    #     last_old_true_found_boundaries = (old_predictions * targets).sum(dim=0)
+    #
+    #     if true_boundaries is None:
+    #         true_boundaries =  last_true_boundaries
+    #         NEW_found_boundaries = last_new_found_boundaries
+    #         NEW_true_found_boundaries = last_new_true_found_boundaries
+    #         OLD_found_boundaries = last_old_found_boundaries
+    #         OLD_true_found_boundaries = last_old_true_found_boundaries
+    #     else:
+    #         true_boundaries += last_true_boundaries
+    #         NEW_found_boundaries += last_new_found_boundaries
+    #         NEW_true_found_boundaries += last_new_true_found_boundaries
+    #         OLD_found_boundaries += last_old_found_boundaries
+    #         OLD_true_found_boundaries += last_old_true_found_boundaries
     #
     #
-    #             #     print(outputs.cpu().max())
-    #             #     print(GT_var.cpu().max())
-    #
-    #             loss.backward()
-    #             optimizer.step()
-    #
-    #             if (i + 1) % 30 == 0:
-    #                 print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
-    #                   % (epoch + 1, num_epochs, i + 1, len(all_images_paths[:nb_images_in_training]), loss.cpu().data))
-    #             i += 1
-
-
-    # Test the Model
-    true_boundaries = None
-
-    NEW_found_boundaries = None
-    NEW_true_found_boundaries = None
-    OLD_found_boundaries = None
-    OLD_true_found_boundaries = None
-
-    # TODO: re-apply foreground-masking and combine with semantic!
-
-    i = 0
-    for image_path in all_images_paths[nb_images_in_training:]:
-    # for i, image_path in enumerate(["/home/abailoni_local/trendyTukan_localdata0/GMIS_predictions/temp_ram/frankfurt/frankfurt_000001_010444_leftImg8bit0_01.input.h5"]):
-        affs_var, GT_var, GT_mask_var, is_only_background, foreground_mask_affs = get_training_data(image_path)
-        if not is_only_background:
-            i += 1
-            # Forward + Backward + Optimize
-            affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
-
-            # TODO: should I take care of something...?
-            # outputs = model(affs_var.unsqueeze(4)).squeeze(4)
-            outputs = model(affs_var)
-
-            # # # Compute DICE loss:
-            # loss = criterion(outputs.unsqueeze(0), GT_var.unsqueeze(0))
-            # # loss = (loss * GT_mask_var).sum() / GT_mask_var.sum()
-            # loss = (loss * GT_mask_var)
-
-            # Compute precision and recall:
-            nb_offsets = affs_var.size()[-1]
-
-
-            old_predictions = (((1. - affs_var) * GT_mask_var) > 0.5).view(-1, nb_offsets)
-            new_predictions = (((1. - sigmoid(outputs)) * GT_mask_var) > 0.5).view(-1, nb_offsets)
-            targets = ( ((1. - GT_var) * GT_mask_var) > 0.5).view(-1, nb_offsets)
-
-            if i%30 == 0:
-                print("Valid: {}/{}...".format(i, len(all_images_paths)-nb_images_in_training))
-                from segmfriends import vis as vis
-                # np_predictions = sigmoid(outputs).cpu().data.numpy()
-                # np_predictions = loss.cpu().data.numpy()
-                np_predictions = np.rollaxis((affs_var ).cpu().data.numpy(), axis=-1, start=0) * foreground_mask_affs
-                for off_stride in [0, 8, 16, 24, 32]:
-                    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-                    for a in fig.get_axes():
-                        a.axis('off')
-                    vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
-                    pdf_path = "./val_plots/{}_GT_affs_{}_orig.pdf".format(i, off_stride)
-                    vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-
-                np_predictions = np.rollaxis((sigmoid(outputs) ).cpu().data.numpy(), axis=-1, start=0) * foreground_mask_affs
-                for off_stride in [0, 8, 16, 24, 32]:
-                    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-                    for a in fig.get_axes():
-                        a.axis('off')
-                    vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
-                    pdf_path = "./val_plots/{}_GT_affs_{}_new.pdf".format(i, off_stride)
-                    vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-
-                np_predictions = (GT_var * GT_mask_var).cpu().data.numpy()
-                for off_stride in [0, 8, 16, 24, 32]:
-                    fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-                    for a in fig.get_axes():
-                        a.axis('off')
-                    vis.plot_output_affin(ax, np.rollaxis(np_predictions, axis=-1, start=0), nb_offset=off_stride + 3,
-                                          z_slice=0)
-                    pdf_path = "./val_plots/{}_GT_affs_{}_gt.pdf".format(i, off_stride)
-                    vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-
-            last_true_boundaries = targets.sum(dim=0)
-
-            last_new_found_boundaries = new_predictions.sum(dim=0)
-            last_new_true_found_boundaries = ( new_predictions * targets ).sum(dim=0)
-
-            last_old_found_boundaries = old_predictions.sum(dim=0)
-            last_old_true_found_boundaries = (old_predictions * targets).sum(dim=0)
-
-            if true_boundaries is None:
-                true_boundaries =  last_true_boundaries
-                NEW_found_boundaries = last_new_found_boundaries
-                NEW_true_found_boundaries = last_new_true_found_boundaries
-                OLD_found_boundaries = last_old_found_boundaries
-                OLD_true_found_boundaries = last_old_true_found_boundaries
-            else:
-                true_boundaries += last_true_boundaries
-                NEW_found_boundaries += last_new_found_boundaries
-                NEW_true_found_boundaries += last_new_true_found_boundaries
-                OLD_found_boundaries += last_old_found_boundaries
-                OLD_true_found_boundaries += last_old_true_found_boundaries
-
-
-    print("New Precision: {}".format(NEW_true_found_boundaries.data.float() / NEW_found_boundaries.data.float()))
-    print("New Recall: {}".format(NEW_true_found_boundaries.data.float() / true_boundaries.data.float()))
-
-    print("Old Precision: {}".format(OLD_true_found_boundaries.data.float() / OLD_found_boundaries.data.float()))
-    print("Old Recall: {}".format(OLD_true_found_boundaries.data.float() / true_boundaries.data.float()))
+    # # print("New Precision: {}".format(NEW_true_found_boundaries.data.float() / NEW_found_boundaries.data.float()))
+    # # print("New Recall: {}".format(NEW_true_found_boundaries.data.float() / true_boundaries.data.float()))
+    # #
+    # # print("Old Precision: {}".format(OLD_true_found_boundaries.data.float() / OLD_found_boundaries.data.float()))
+    # # print("Old Recall: {}".format(OLD_true_found_boundaries.data.float() / true_boundaries.data.float()))
 
     torch.save(model, model_path)

@@ -65,14 +65,19 @@ def get_dataset_offsets(dataset='CREMI'):
     return parse_offsets(offset_file)
 
 
-def get_GMIS_dataset(partial=False):
+
+def get_GMIS_dataset(type='val', partial=False):
     some_img = ['frankfurt_000001_016273_leftImg8bit', 'frankfurt_000001_013016_leftImg8bit', 'frankfurt_000001_030310_leftImg8bit', 'frankfurt_000001_080830_leftImg8bit', 'frankfurt_000001_028335_leftImg8bit', 'frankfurt_000001_042384_leftImg8bit', 'frankfurt_000001_064798_leftImg8bit', 'frankfurt_000001_034047_leftImg8bit', 'frankfurt_000000_013067_leftImg8bit', 'frankfurt_000001_010444_leftImg8bit', 'lindau_000024_000019_leftImg8bit', 'lindau_000034_000019_leftImg8bit', 'lindau_000026_000019_leftImg8bit', 'lindau_000044_000019_leftImg8bit', 'lindau_000011_000019_leftImg8bit', 'lindau_000042_000019_leftImg8bit', 'lindau_000018_000019_leftImg8bit', 'lindau_000027_000019_leftImg8bit', 'lindau_000036_000019_leftImg8bit', 'lindau_000030_000019_leftImg8bit', 'munster_000001_000019_leftImg8bit', 'munster_000080_000019_leftImg8bit', 'munster_000069_000019_leftImg8bit', 'munster_000155_000019_leftImg8bit', 'munster_000100_000019_leftImg8bit', 'munster_000046_000019_leftImg8bit', 'munster_000167_000019_leftImg8bit', 'munster_000153_000019_leftImg8bit', 'munster_000112_000019_leftImg8bit', 'munster_000030_000019_leftImg8bit']
 
-    # some_img = ['frankfurt_000001_020693_leftImg8bit']
+    some_img = ['frankfurt_000001_020693_leftImg8bit']
     # some_img = ['frankfurt_000001_016273_leftImg8bit']
     # some_img = ['frankfurt_000001_016273_leftImg8bit0_01']
+    # "000001_020693"
 
-    root_dir = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/temp_ram")
+    if type == "val":
+        root_dir = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/{}/temp_ram".format(type))
+    else:
+        root_dir = os.path.join(get_hci_home_path(), "GMIS_predictions/{}/temp_ram".format(type))
     all_file_paths = []
     for subdir, dirs, files in os.walk(root_dir):
         for dir in dirs:
