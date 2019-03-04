@@ -25,7 +25,9 @@ from segmfriends.algorithms import get_segmentation_pipeline
 from long_range_compare.load_datasets import get_dataset_data, get_dataset_offsets, CREMI_crop_slices, CREMI_sub_crops_slices, get_GMIS_dataset
 
 from long_range_compare import GMIS_utils as GMIS_utils
+from long_range_compare.data_paths import get_trendytukan_drive_path
 
+from long_range_compare.GMIS_utils import LogisticRegression
 
 # Add epsilon to affinities:
 def add_epsilon(affs, eps=1e-5):
@@ -63,136 +65,37 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
         shape = f['shape'][:]
         strides = f['offset_ranges'][:]
         affs_prob = f['instance_affinities'][:]
-        affs_balanced = f['balanced_affs'][:]
+        # affs_balanced = f['balanced_affs'][:]
         class_prob = f['semantic_affinities'][:]
         class_mask = f['semantic_argmax'][:]
 
+    # lock.acquire()
+    affs_balanced = trained_log_regr.infer(image_path)
+    # lock.release()
 
-    # Take average:
-    # affs_prob = (affs_prob + affs_balanced) / 2.0
-
-    # -----------------------------------
-    # Pre-process affinities:
-    # -----------------------------------
     strides = np.array([1, 2, 4, 8, 16, 32], dtype=np.int32)
     offsets = GMIS_utils.get_offsets(strides)
 
-    # combined_affs = affs_prob
-    combined_affs = GMIS_utils.combine_affs_with_class(affs_prob, class_prob, refine_bike=True, class_mask=class_mask)
+    # Combine with semantic predictions:
+    affs_balanced, _ = GMIS_utils.combine_affs_and_mask(affs_balanced, class_prob, class_mask, offsets,
+                                                     mask_background_affinities=False)
 
-    foreground_mask = GMIS_utils.get_foreground_mask(combined_affs)
-    # foreground_mask_affs = np.tile(foreground_mask, reps=(combined_affs.shape[2], combined_affs.shape[3], 1, 1))
-    # foreground_mask_affs = np.transpose(foreground_mask_affs, (2, 3, 0, 1))
+    # Mask them with the previously estimated background:
+    affinities_orig, foreground_mask_affs = GMIS_utils.combine_affs_and_mask(affs_prob, class_prob, class_mask, offsets)
+    affs_balanced *=  foreground_mask_affs
 
+    # Take average
+    affinities = (affinities_orig + affs_balanced) / 2.0
 
-    # RE-adjust affinities:
-    def rescale_affs(affs, scale):
-        p_min = scale
-        p_max = 1. - scale
-        return (p_max - p_min) * affs + p_min
-
-
-    # scaling_factors = np.array([0.49, 0.49, 0.49, 0.0, 0.0, 0.0])
-    # # scaling_factors = np.array([0., 0., 0., 0., 0., 0.])
-    # # bias_factors = np.array([0.0501, 0.0901, 0., 0., 0., 0.0]) # More positive == merge more
-    # bias_factors = np.array([-0.011, -0.011, -0., 0., 0., 0.0]) # More positive == merge more
-    # only_attractive = [False, False, False, False, False, False]
-    # for nb_str in range(strides.shape[0]):
-    #     combined_affs[:,:,nb_str] = rescale_affs(combined_affs[:,:,nb_str], scaling_factors[nb_str]) + bias_factors[nb_str]
-    #     if only_attractive[nb_str]:
-    #         combined_affs[:, :, nb_str][combined_affs[:, :, nb_str] < 0.5] = 0.5
-
-    # Mask affinities with the foreground_mask_affs:
-    # combined_affs *= foreground_mask_affs
-
-
-    # Reshape affinities in the expected nifty-shape:
-    affinities = np.expand_dims(combined_affs.reshape(combined_affs.shape[0], combined_affs.shape[1], -1), axis=0)
-    affinities = np.rollaxis(affinities, axis=-1, start=0)
-
-    def distort_affs(affs):
-
-        affs = affs.copy()
-
-
-
-        def mod_affs(mod, slc, scale_factor=0.1):
-            if mod == 'merge-bias':
-                # ---------------------------------------
-                # Increase merges:
-                affs[slc] += (1 - (1 - affs[slc])) * scale_factor
-            elif mod == 'split-bias':
-                # ---------------------------------------
-                # Increase splits:
-                affs[slc] -= (1 - affs[slc]) * scale_factor
-
-        slc_short = slice(0, 16)
-        slc_middle = slice(16, 32)
-        slc_long = slice(32, 48)
-        mod_affs('split-bias', slc_short, scale_factor=0.2)
-        mod_affs('split-bias', slc_middle, scale_factor=0.08)
-        mod_affs('merge-bias', slc_long, scale_factor=0.06)
-
-        affs = np.clip(affs, 0., 1.)
-
-        # Add back some noise to the extremes:
-        # affs += np.random.normal(scale=0.00001, size=affs.shape)
-        # min_affs, max_affs = affs.min(), affs.max()
-        # if min_affs < 0:
-        #     affs -= min_affs
-        # if max_affs > 1.0:
-        #     affs /= max_affs
-
-        return affs
-
-    # affinities = distort_affs(affinities)
-
-    # affinities += np.random.normal(scale=0.0001, size=affinities.shape)
-    # affinities -= affinities.min()
-    # affinities /= affinities.max()
-
-
-    foreground_mask_affs = GMIS_utils.compute_real_background_mask(np.expand_dims(foreground_mask, axis=0), offsets, channel_affs=0)
-
-    affinities *= foreground_mask_affs
-
-    # TODO: add noise, add offset_weights and thresh 0.3
-
-    # fake_foreground = np.array([[[1, 1, 1], [1, 0, 1], [1, 1, 1], ]])
-    # print(compute_real_background_mask(fake_foreground, offsets, channel_affs=0)[0], offsets[0])
-
-
-    # # PLOTTING STUFF:
+    # current_shape = affs_balanced.shape
+    # affs_balanced = np.rollaxis(affs_balanced, axis=0, start=4)[0].reshape(current_shape[2], current_shape[3], 6, 8)
+    # affs_prob = (affs_prob + affs_balanced) / 2.0
     #
-    # # if "frankfurt_000001_020693_leftImg8bit1_01" in image_path:
-    # from segmfriends import vis as vis
-    # for off_stride in [0,8,16,24,32,40]:
-    #     # affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
-    #     # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
-    #     # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
-    #     # if affs_repr.min() < 0:
-    #     #     affs_repr += np.abs(affs_repr.min())
-    #     # affs_repr /= affs_repr.max()
+    # # -----------------------------------
+    # # Pre-process affinities:
+    # # -----------------------------------
     #
-    #
-    #     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-    #     for a in fig.get_axes():
-    #         a.axis('off')
-    #
-    #
-    #     # affs_repr = np.linalg.norm(affs_repr, axis=-1)
-    #     # ax.imshow(affs_repr, interpolation="none")
-    #
-    #     vis.plot_output_affin(ax, affinities, nb_offset=off_stride+3, z_slice=0)
-    #
-    #     pdf_path = image_path.replace(
-    #         '.input.h5', '.affs_{}.pdf'.format(off_stride))
-    #     # fig.savefig(pdf_path)
-    #     pdf_path = "./debug_balanced_affs_{}.pdf".format(off_stride)
-    #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-    #     print(off_stride)
-    # #
-    # #
+    # affinities, foreground_mask_affs = GMIS_utils.combine_affs_and_mask(affs_prob, class_prob, class_mask, offsets)
 
 
     config_path = os.path.join(get_hci_home_path(), "pyCharm_projects/longRangeAgglo/experiments/cityscapes/configs")
@@ -217,11 +120,11 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     # offset_weights[32:] = 1
     #
 
-    affs_balanced = GMIS_utils.combine_affs_with_class(affs_balanced, class_prob, refine_bike=True, class_mask=class_mask)
-    affs_balanced = np.expand_dims(affs_balanced.reshape(affs_balanced.shape[0], affs_balanced.shape[1], -1), axis=0)
-    affs_balanced = np.rollaxis(affs_balanced, axis=-1, start=0)
-    affs_balanced *= foreground_mask_affs
-    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_weights'] = affs_balanced
+    # affs_balanced = GMIS_utils.combine_affs_with_class(affs_balanced, class_prob, refine_bike=True, class_mask=class_mask)
+    # affs_balanced = np.expand_dims(affs_balanced.reshape(affs_balanced.shape[0], affs_balanced.shape[1], -1), axis=0)
+    # affs_balanced = np.rollaxis(affs_balanced, axis=-1, start=0)
+    # affs_balanced *= foreground_mask_affs
+    # post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_weights'] = affs_balanced
     # post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['extra_aggl_kwargs']['threshold'] = 0.25
 
 
@@ -303,10 +206,56 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
         '.input.h5', '.inst.confidence.txt')
 
     # inner_path = agglo + "_" + str(local_attraction)
-    inner_path = agglo + "_original_affs_plus_balanced_weights_thresh040"
+    inner_path = agglo + "_avg_retrained_bal_affs_thresh040"
     # inner_path = "MEAN_bk_fixed"
     vigra.writeHDF5(pred_segm_WS[0].astype('uint16'), inst_out_file, inner_path)
     vigra.writeHDF5(confidence_scores, inst_out_conf_file, inner_path)
+
+
+    # # -------------------------------------------------
+    # # PLOTTING:
+    #
+    # from segmfriends import vis as vis
+    #
+    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    # for a in fig.get_axes():
+    #     a.axis('off')
+    #
+    # # affs_repr = np.linalg.norm(affs_repr, axis=-1)
+    # # ax.imshow(affs_repr, interpolation="none")
+    #
+    # vis.plot_segm(ax, pred_segm_WS, z_slice=0)
+    #
+    # # fig.savefig(pdf_path)
+    # pdf_path = "./segm.pdf"
+    # vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+    #
+    # for off_stride in [0,8,16,]:
+    #     # affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
+    #     # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
+    #     # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
+    #     # if affs_repr.min() < 0:
+    #     #     affs_repr += np.abs(affs_repr.min())
+    #     # affs_repr /= affs_repr.max()
+    #
+    #
+    #     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    #     for a in fig.get_axes():
+    #         a.axis('off')
+    #
+    #
+    #     # affs_repr = np.linalg.norm(affs_repr, axis=-1)
+    #     # ax.imshow(affs_repr, interpolation="none")
+    #
+    #     vis.plot_output_affin(ax, affinities, nb_offset=off_stride+3, z_slice=0)
+    #
+    #     pdf_path = image_path.replace(
+    #         '.input.h5', '.affs_{}.pdf'.format(off_stride))
+    #     # fig.savefig(pdf_path)
+    #     pdf_path = "./balanced_affs_{}.pdf".format(off_stride)
+    #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+    #     print(off_stride)
+
 
 
     pbar.update(1)
@@ -349,12 +298,17 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     #     vigra.writeHDF5(mergeTimes[:3].astype('int64'), UCM_file, 'merge_times')
 
 
-
+def pool_initializer(l):
+    global lock
+    lock = l
 
 
 if __name__ == '__main__':
 
     all_images_paths = get_GMIS_dataset(partial=False)
+
+    global trained_log_regr
+    trained_log_regr = GMIS_utils.LogRegrModel()
 
     all_paths_to_process = []
     all_agglo_type = []
@@ -369,6 +323,7 @@ if __name__ == '__main__':
                 # for agglo in ['MEAN_constr']:
                 # for agglo in ['MAX']:
                 for agglo in ['MEAN_constr']:
+                # for agglo in ['MEAN_constr', 'MEAN', 'MAX', 'greedyFixation', 'GAEC']:
                     if local_attr and agglo in ['greedyFixation', 'GAEC']:
                         continue
                     # for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 17), np.linspace(0.11, 0.8, 18))):
@@ -389,7 +344,9 @@ if __name__ == '__main__':
     # Multithread:
     from multiprocessing.pool import ThreadPool
     from itertools import repeat
-    pool = ThreadPool(processes=12)
+    from multiprocessing import Lock
+    l = Lock()
+    pool = ThreadPool(initializer=pool_initializer, initargs=(l,),  processes=12)
 
     from tqdm import tqdm
     #

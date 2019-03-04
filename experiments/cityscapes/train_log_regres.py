@@ -29,21 +29,7 @@ from segmfriends.transform.segm_to_bound import compute_boundary_mask_from_label
 
 from inferno.extensions.criteria.set_similarity_measures import SorensenDiceLoss
 
-# Model
-class LogisticRegression(nn.Module):
-    def __init__(self, input_size, output_size):
-        # TODO: add batchnorm? So far I used batch_size = 1
-        super(LogisticRegression, self).__init__()
-        self.linear1 = nn.Linear(input_size, input_size)
-        self.linear2 = nn.Linear(input_size, output_size)
-        self.activation = nn.ELU()
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        l1 = self.activation(self.linear1(x))
-        out = self.linear2(l1)
-        return self.sigmoid(out)
-
+from long_range_compare.GMIS_utils import LogisticRegression
 
 
 
@@ -63,27 +49,20 @@ def get_training_data(image_path):
     # -----------------------------------
     # Pre-process affinities:
     # -----------------------------------
-    # combined_affs = affs_prob
-    combined_affs = GMIS_utils.combine_affs_with_class(affs_prob, class_prob, refine_bike=True, class_mask=class_mask)
+    affinities, foreground_mask_affs =  GMIS_utils.combine_affs_and_mask(affs_prob, class_prob, class_mask, offsets,
+                                     combine_with_semantic=False, mask_background_affinities=False)
 
-    foreground_mask = GMIS_utils.get_foreground_mask(combined_affs)
-
-    # Reshape affinities in the expected nifty-shape:
-    affinities = np.expand_dims(combined_affs.reshape(combined_affs.shape[0], combined_affs.shape[1], -1), axis=0)
-    affinities = np.rollaxis(affinities, axis=-1, start=0)
-
-    foreground_mask_affs = compute_boundary_mask_from_label_image(np.expand_dims(foreground_mask, axis=0),
-                                                                             offsets, channel_affs=0,
-                                                                             pad_mode='constant',
-                                                                             pad_constant_values=False,
-                                                                             background_value=False)
-    affinities *= foreground_mask_affs
 
     # -----------------------------------
     # Get GT-instance-affinities:
     # -----------------------------------
     GT_instances = np.expand_dims(GT_instances, axis=0)
-    GT_affs = np.logical_not(compute_boundary_mask_from_label_image(GT_instances, offsets, channel_affs=0))
+    # Pixels connected to the background should always predict "split":
+    GT_affs = compute_boundary_mask_from_label_image(GT_instances, offsets,
+                                                                           channel_affs=0, pad_mode='constant',
+                                                                           pad_constant_values=0,
+                                                                           background_value=0,
+                                                     return_affinities=True)
 
     # Find edge-mask (False if any of the two pixels includes a GT-background label):
     # we use it to mask the Dice Loss (so we focus the training only on boundaries between instances and not between
@@ -91,7 +70,8 @@ def get_training_data(image_path):
     foreground_GT_affs = compute_boundary_mask_from_label_image(GT_instances != 0, offsets,
                                                                            channel_affs=0, pad_mode='constant',
                                                                            pad_constant_values=False,
-                                                                           background_value=False)
+                                                                           background_value=False,
+                                                                return_affinities=True)
 
     # real_boundaries = np.logical_and(np.logical_not(GT_affs), foreground_GT_affs)
     # real_inner_parts = np.logical_and(GT_affs, foreground_GT_affs)
@@ -162,12 +142,12 @@ if __name__ == '__main__':
     print("Training ROIs: ", nb_images_in_training)
 
 
-    model_path = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/logistic_regression_model/pyT_model_train.pkl")
-    if os.path.exists(model_path):
-        print("Model loaded from file!")
-        model = torch.load(model_path)
-    else:
-        model = LogisticRegression(input_size, output_size)
+    model_path = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/logistic_regression_model/pyT_model_train_2.pkl")
+    # if os.path.exists(model_path):
+    #     print("Model loaded from file!")
+    #     model = torch.load(model_path)
+    # else:
+    model = GMIS_utils.LogisticRegression(input_size, output_size)
 
     # Loss and Optimizer
     # Softmax is internally computed.
@@ -186,9 +166,6 @@ if __name__ == '__main__':
 
     # TODO: increase batch size! (if it is possible, sizewise...)
 
-    sigmoid = nn.Sigmoid().to(device)
-    #
-    #
     # Training the Model
     for epoch in range(num_epochs):
         i = 0
@@ -200,19 +177,19 @@ if __name__ == '__main__':
             if not is_only_background:
                 # Forward + Backward + Optimize
                 affs_var, GT_var, GT_mask_var = affs_var.to(device), GT_var.to(device), GT_mask_var.to(device)
-                GT_var = (1. - GT_var) * GT_mask_var
-                if GT_var.sum().cpu().data == 0:
+                targets_for_loss_var = (1. - GT_var) * GT_mask_var
+                if targets_for_loss_var.sum().cpu().data == 0:
                     continue
 
 
                 optimizer.zero_grad()
                 # outputs = sigmoid(model(affs_var.unsqueeze(4)).squeeze(4))
-                outputs = sigmoid(model(affs_var))
+                outputs = model(affs_var)
 
                 # # Compute DICE loss:
-                outputs = (1. - outputs) * GT_mask_var
+                predictions_for_loss = (1. - outputs) * GT_mask_var
 
-                loss = criterion(outputs.permute(3,0,1,2).unsqueeze(0), GT_var.permute(3,0,1,2).unsqueeze(0))
+                loss = criterion(predictions_for_loss.permute(3,0,1,2).unsqueeze(0), targets_for_loss_var.permute(3,0,1,2).unsqueeze(0))
 
 
                 #     print(outputs.cpu().max())
@@ -224,7 +201,47 @@ if __name__ == '__main__':
                 if (i + 1) % 30 == 0:
                     print('Epoch: [%d/%d], Step: [%d/%d], Loss: %.4f'
                       % (epoch + 1, num_epochs, i + 1, len(all_images_paths[:nb_images_in_training]), loss.cpu().data))
+                if (i + 1) % 500 == 0:
+                    torch.save(model, model_path)
+                    print("Saved model!")
+
+                if (i + 1) % 50 == 0:
+                        # print("Valid: {}/{}...".format(i, len(all_images_paths)-nb_images_in_training))
+                        from segmfriends import vis as vis
+                        # np_predictions = sigmoid(outputs).cpu().data.numpy()
+                        # np_predictions = loss.cpu().data.numpy()
+                        np_predictions = np.rollaxis((affs_var ).cpu().data.numpy(), axis=-1, start=0)
+                        for off_stride in [0, 8, 16, 24, 32]:
+                            fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+                            for a in fig.get_axes():
+                                a.axis('off')
+                            vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
+                            pdf_path = "./train_plots/{}_{}_orig.pdf".format(i, off_stride)
+                            vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+
+                        np_predictions = np.rollaxis(outputs.cpu().data.numpy(), axis=-1, start=0)
+                        for off_stride in [0, 8, 16, 24, 32]:
+                            fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+                            for a in fig.get_axes():
+                                a.axis('off')
+                            vis.plot_output_affin(ax, np_predictions, nb_offset=off_stride+3, z_slice=0)
+                            pdf_path = "./train_plots/{}_{}_finetuned.pdf".format(i, off_stride)
+                            vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+
+                        np_predictions = (GT_var).cpu().data.numpy()
+                        for off_stride in [0, 8, 16, 24, 32]:
+                            fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+                            for a in fig.get_axes():
+                                a.axis('off')
+                            vis.plot_output_affin(ax, np.rollaxis(np_predictions, axis=-1, start=0), nb_offset=off_stride + 3,
+                                                  z_slice=0)
+                            pdf_path = "./train_plots/{}_{}_gt.pdf".format(i, off_stride)
+                            vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+
                 i += 1
+
+
+
     #
     #
     # # Test the Model
