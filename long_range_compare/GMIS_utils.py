@@ -156,7 +156,6 @@ class LogRegrModel:
         # Hyper Parameters
         self.input_size = 48
         self.output_size = 48
-        self.num_epochs = 2
         # self.learning_rate = 0.001
         self.learning_rate = 0.005
 
@@ -196,18 +195,21 @@ class LogRegrModel:
     def get_data(self, image_path):
         # Load data:
         with h5py.File(image_path, 'r') as f:
-            shape = f['shape'][:]
             strides = f['offset_ranges'][:]
-            affs_prob = f['instance_affinities'][:]
-            class_prob = f['semantic_affinities'][:]
-            class_mask = f['semantic_argmax'][:]
+            instance_affs = f['instance_affinities'][:]
+            semantic_affs = f['semantic_affinities'][:]
+            semantic_argmax = f['semantic_argmax'][:]
             GT_instances = f['instance_gt'][:]
+        return strides, instance_affs, semantic_affs, semantic_argmax, GT_instances
+
+    def get_training_variables(self, image_path):
+        strides, instance_affs, semantic_affs, semantic_argmax, GT_instances = self.get_data(image_path)
 
         offsets = get_offsets(strides)
         # -----------------------------------
         # Pre-process affinities:
         # -----------------------------------
-        affinities, foreground_mask_affs = combine_affs_and_mask(affs_prob, class_prob, class_mask, offsets)
+        affinities, foreground_mask_affs = combine_affs_and_mask(instance_affs, semantic_affs, semantic_argmax, offsets)
 
         # -----------------------------------
         # Get GT-instance-affinities:
@@ -247,21 +249,37 @@ class LogRegrModel:
 
         return affs_var, GT_var, GT_mask_var, is_only_background
 
-    def infer(self, image_path):
-        affs_var, GT_var, GT_mask_var, is_only_background = self.get_data(image_path)
+    def infer(self, image_path, take_average=True):
+        affs_var, GT_var, GT_mask_var, is_only_background = self.get_training_variables(image_path)
 
         outputs = self.model(affs_var)
 
-        new_affs = outputs.cpu().data.numpy()
+        finetuned_inst_affs = outputs.cpu().data.numpy()
 
         # Reshape them in the original form:
-        current_shape = new_affs.shape
-        new_affs = new_affs[0].reshape(current_shape[1], current_shape[2], 6, 8)
+        current_shape = finetuned_inst_affs.shape
+        finetuned_inst_affs = finetuned_inst_affs[0].reshape(current_shape[1], current_shape[2], 6, 8)
 
-        return new_affs
+
+        # Combine with semantic predictions:
+        strides, instance_affs, semantic_affs, semantic_argmax, GT_instances = self.get_data(image_path)
+        offsets = get_offsets(strides)
+        finetuned_inst_affs, _ = combine_affs_and_mask(finetuned_inst_affs, semantic_affs, semantic_argmax, offsets,
+                                                            mask_background_affinities=False)
+
+        # Mask them with the previously estimated background:
+        instance_affs, foreground_mask_affs = combine_affs_and_mask(instance_affs, semantic_affs, semantic_argmax,
+                                                                                 offsets)
+        finetuned_inst_affs *= foreground_mask_affs
+
+        # Take average
+        output_affs = (instance_affs + finetuned_inst_affs) / 2.0 if take_average else finetuned_inst_affs
+        return output_affs
 
         # with h5py.File(image_path, 'r+') as f:
         #     if 'balanced_affs' in f:
         #         del f['balanced_affs']
         #     f['balanced_affs'] = new_affs.astype('float16')
 
+    def train(self, num_epochs):
+        pass

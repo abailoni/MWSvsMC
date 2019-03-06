@@ -143,11 +143,11 @@ if __name__ == '__main__':
 
 
     model_path = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/logistic_regression_model/pyT_model_train_2.pkl")
-    # if os.path.exists(model_path):
-    #     print("Model loaded from file!")
-    #     model = torch.load(model_path)
-    # else:
-    model = GMIS_utils.LogisticRegression(input_size, output_size)
+    if os.path.exists(model_path):
+        print("Model loaded from file!")
+        model = torch.load(model_path)
+    else:
+        model = GMIS_utils.LogisticRegression(input_size, output_size)
 
     # Loss and Optimizer
     # Softmax is internally computed.
@@ -166,10 +166,18 @@ if __name__ == '__main__':
 
     # TODO: increase batch size! (if it is possible, sizewise...)
 
+    # TODO: improving options
+    #  - apply semantic combination to the inputed affs
+    #  - re-create same two-layers network
+    #  -
+
     # Training the Model
     for epoch in range(num_epochs):
         i = 0
-        for image_path in all_images_paths[:nb_images_in_training]:
+        if epoch == 0:
+            i = 7500
+
+        for image_path in all_images_paths[i:nb_images_in_training]:
 
             affs_var, GT_var, GT_mask_var, is_only_background = get_training_data(image_path)
 
@@ -205,7 +213,7 @@ if __name__ == '__main__':
                     torch.save(model, model_path)
                     print("Saved model!")
 
-                if (i + 1) % 50 == 0:
+                if (i + 1) % 400 == 0:
                         # print("Valid: {}/{}...".format(i, len(all_images_paths)-nb_images_in_training))
                         from segmfriends import vis as vis
                         # np_predictions = sigmoid(outputs).cpu().data.numpy()

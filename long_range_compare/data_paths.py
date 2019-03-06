@@ -20,5 +20,7 @@ def get_trendytukan_drive_path():
         return '/mnt/localdata0/abailoni/'
     elif hostname == 'trendytukan' and username == 'abailoni_local':
         return '/home/abailoni_local/trendyTukan_localdata0/'
+    elif hostname == 'ialgpu01':
+        return '/home/abailoni/trendyTukan_drive/'
     else:
-        raise ValueError("Local drive not accessible from centrally administred machines!")
+        return '/net/hciserver03/storage/abailoni/trendyTukan_drive/'

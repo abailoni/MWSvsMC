@@ -59,50 +59,71 @@ def combine_crop_slice_str(crop_str, subcrop_str):
 def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
                      from_superpixels=False, use_multicut=False):
 
+    inst_out_file = image_path.replace(
+        '.input.h5', '.output.h5')
+    inst_out_conf_file = image_path.replace(
+        '.input.h5', '.inst.confidence.h5')
+
+    # TODO: 1
+    # NAME_AGGLO = "orig_affs"
+    # THRESH = 'thresh030'
+    NAME_AGGLO = "finetuned_affs"
+    THRESH = 'thresh050'
+    # NAME_AGGLO = "finetuned_affs_avg"
+    # THRESH = 'thresh050'
+
+    # inner_path = agglo + "_avg_retrained_bal_affs_thresh050"
+    inner_path = "{}_{}_{}".format(agglo, NAME_AGGLO, THRESH)
+    # inner_path = "{}_orig_affs_thresh030".format(agglo)
+
+    model_keys = [agglo] if not local_attraction else [agglo, "impose_local_attraction"]
+    model_keys += [THRESH]
+
+    already_exists = True
+    with h5py.File(inst_out_file, 'r') as f:
+        if inner_path not in f:
+            already_exists = False
+    with h5py.File(inst_out_conf_file, 'r') as f:
+        if inner_path not in f:
+            already_exists = False
+
+    if already_exists:
+        pbar.update(1)
+        return
+    # print(image_path)
+
     # print("Processing {}...".format(image_path))
     # Load data:
     with h5py.File(image_path, 'r') as f:
-        shape = f['shape'][:]
-        strides = f['offset_ranges'][:]
-        affs_prob = f['instance_affinities'][:]
-        # affs_balanced = f['balanced_affs'][:]
-        class_prob = f['semantic_affinities'][:]
-        class_mask = f['semantic_argmax'][:]
+        # TODO: 2
+        # affinities = f['instance_affinities'][:]
+        affinities = f['finetuned_affs_noAvg'][:]
+        # affinities = f['finetuned_affs'][:]
 
-    # lock.acquire()
-    affs_balanced = trained_log_regr.infer(image_path)
-    # lock.release()
+
+        # shape = f['shape'][:]
+        # strides = f['offset_ranges'][:]
+        # affs_prob = f['instance_affinities'][:]
+        # affs_balanced = f['balanced_affs'][:]
+        # class_prob = f['semantic_affinities'][:]
+        # class_mask = f['semantic_argmax'][:]
 
     strides = np.array([1, 2, 4, 8, 16, 32], dtype=np.int32)
     offsets = GMIS_utils.get_offsets(strides)
 
-    # Combine with semantic predictions:
-    affs_balanced, _ = GMIS_utils.combine_affs_and_mask(affs_balanced, class_prob, class_mask, offsets,
-                                                     mask_background_affinities=False)
-
-    # Mask them with the previously estimated background:
-    affinities_orig, foreground_mask_affs = GMIS_utils.combine_affs_and_mask(affs_prob, class_prob, class_mask, offsets)
-    affs_balanced *=  foreground_mask_affs
-
-    # Take average
-    affinities = (affinities_orig + affs_balanced) / 2.0
-
-    # current_shape = affs_balanced.shape
-    # affs_balanced = np.rollaxis(affs_balanced, axis=0, start=4)[0].reshape(current_shape[2], current_shape[3], 6, 8)
-    # affs_prob = (affs_prob + affs_balanced) / 2.0
     #
     # # -----------------------------------
     # # Pre-process affinities:
     # # -----------------------------------
     #
-    # affinities, foreground_mask_affs = GMIS_utils.combine_affs_and_mask(affs_prob, class_prob, class_mask, offsets)
+    # TODO: 3
+    # affinities, foreground_mask_affs = GMIS_utils.combine_affs_and_mask(affinities, class_prob, class_mask, offsets)
 
 
     config_path = os.path.join(get_hci_home_path(), "pyCharm_projects/longRangeAgglo/experiments/cityscapes/configs")
     configs = {'models': yaml2dict(os.path.join(config_path, 'models_config.yml')),
                'postproc': yaml2dict(os.path.join(config_path, 'post_proc_config.yml'))}
-    model_keys = [agglo] if not local_attraction else [agglo, "impose_local_attraction"]
-    model_keys += ['thresh040']
+
     if from_superpixels:
         if use_multicut:
             model_keys = ["use_fragmenter", 'multicut_exact']
@@ -197,24 +218,15 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     confidence_scores = GMIS_utils.get_confidence_scores(pred_segm_WS, affinities, offsets)
 
 
-    # Save results:
-    inst_out_file = image_path.replace(
-        '.input.h5', '.output.h5')
-    inst_out_conf_file = image_path.replace(
-        '.input.h5', '.inst.confidence.h5')
-    inst_out_conf_txt_file = image_path.replace(
-        '.input.h5', '.inst.confidence.txt')
-
-    # inner_path = agglo + "_" + str(local_attraction)
-    inner_path = agglo + "_avg_retrained_bal_affs_thresh040"
     # inner_path = "MEAN_bk_fixed"
     vigra.writeHDF5(pred_segm_WS[0].astype('uint16'), inst_out_file, inner_path)
     vigra.writeHDF5(confidence_scores, inst_out_conf_file, inner_path)
+    vigra.writeHDF5(np.array([MC_energy['MC_energy']]), inst_out_conf_file, "MC_energy/" + inner_path)
 
 
-    # # -------------------------------------------------
-    # # PLOTTING:
-    #
+    # # # # -------------------------------------------------
+    # # # # PLOTTING:
+    # # #
     # from segmfriends import vis as vis
     #
     # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
@@ -255,7 +267,9 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     #     pdf_path = "./balanced_affs_{}.pdf".format(off_stride)
     #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
     #     print(off_stride)
-
+    #
+    #
+    #
 
 
     pbar.update(1)
@@ -307,8 +321,8 @@ if __name__ == '__main__':
 
     all_images_paths = get_GMIS_dataset(partial=False)
 
-    global trained_log_regr
-    trained_log_regr = GMIS_utils.LogRegrModel()
+    # global trained_log_regr
+    # trained_log_regr = GMIS_utils.LogRegrModel()
 
     all_paths_to_process = []
     all_agglo_type = []
@@ -320,10 +334,11 @@ if __name__ == '__main__':
     for _ in range(1):
         for path in all_images_paths:
             for local_attr in [False]:
-                # for agglo in ['MEAN_constr']:
+                for agglo in ['MEAN_constr', 'MEAN']:
                 # for agglo in ['MAX']:
-                for agglo in ['MEAN_constr']:
-                # for agglo in ['MEAN_constr', 'MEAN', 'MAX', 'greedyFixation', 'GAEC']:
+                # for agglo in ['MEAN_constr']:
+                # for agglo in ['MEAN_constr', 'MEAN', 'MutexWatershed', 'greedyFixation', 'GAEC',
+                #               'CompleteLinkage', 'CompleteLinkagePlusCLC', 'SingleLinkage', 'SingleLinkagePlusCLC']:
                     if local_attr and agglo in ['greedyFixation', 'GAEC']:
                         continue
                     # for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 17), np.linspace(0.11, 0.8, 18))):

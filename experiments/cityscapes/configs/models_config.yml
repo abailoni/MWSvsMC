@@ -87,16 +87,49 @@ MEAN:
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
-remove_small:
+#remove_small:
+#  parent_model: ['gen_HC']
+#  postproc:
+#    generalized_HC_kwargs:
+#      agglomeration_kwargs:
+#        extra_aggl_kwargs:
+#          remove_small_segments: True
+#          small_segments_thresh: 4
+
+MutexWatershed:
   parent_model: ['gen_HC']
   postproc:
     generalized_HC_kwargs:
       agglomeration_kwargs:
         extra_aggl_kwargs:
-          remove_small_segments: True
-          small_segments_thresh: 4
+          update_rule: 'MutexWatershed'
+          add_cannot_link_constraints: False
+#          remove_small_segments: True
+#          small_segments_thresh: 200
 
-MAX:
+CompleteLinkage:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'min'
+          add_cannot_link_constraints: False
+#          remove_small_segments: True
+#          small_segments_thresh: 200
+
+CompleteLinkagePlusCLC:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'min'
+          add_cannot_link_constraints: True
+#          remove_small_segments: True
+#          small_segments_thresh: 200
+
+SingleLinkage:
   parent_model: ['gen_HC']
   postproc:
     generalized_HC_kwargs:
@@ -107,6 +140,16 @@ MAX:
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
+SingleLinkagePlusCLC:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'max'
+          add_cannot_link_constraints: True
+#          remove_small_segments: True
+#          small_segments_thresh: 200
 
 greedyFixation:
   parent_model: ['gen_HC']
