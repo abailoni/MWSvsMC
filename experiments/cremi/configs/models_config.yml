@@ -184,6 +184,10 @@ different_noise_shortEdges:
   postproc:
     experiment_name: 'different_merge_noise_exp_shortEdges_fromPixels'
 
+debug_exp:
+  postproc:
+    experiment_name: 'debug_exp'
+
 
 smart_noise_split_allEdges:
   postproc:

@@ -164,71 +164,6 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
     affinities = affinities.copy()
 
     offsets = get_dataset_offsets(dataset)
-    # affinities, GT = get_dataset_data(dataset, sample, crop_slice, run_connected_components=False)
-    # sub_crop = parse_data_slice(sub_crop_slice)
-    # affinities = affinities[sub_crop]
-    # GT = GT[sub_crop[1:]]
-    # GT = vigra.analysis.labelVolumeWithBackground(GT.astype('uint32'))
-    # affinities = add_epsilon(affinities)
-
-    # affinities[:3] = 0.5001
-
-    if add_smart_noise:
-        # Add Smart noise:
-        temp_file = os.path.join(get_hci_home_path(), 'affs_plus_smart_noise.h5')
-        # vigra.writeHDF5(GT.astype('uint64'), temp_file, 'GT')
-        noise_slc = slice(0,3)
-
-        # # vigra.writeHDF5(affinities[noise_slc], temp_file, 'affs')
-        #
-        # # from segmfriends.transform.segm_to_bound import compute_mask_boundaries
-        # #
-        # # true_merges = np.logical_not(compute_mask_boundaries(GT,
-        # #                             np.array(offsets[noise_slc]),
-        # #                             compress_channels=False,
-        # #                             channel_affs=0))
-        #
-        #
-        # # ---------------------------------------
-        # # Increase merges:
-        # # affinities[noise_slc] += (1 - (1-affinities[noise_slc])**2) *0.15
-        # smart_noise_affs = np.absolute(np.random.normal(scale=(1 - (1-affinities[noise_slc])**2) * noise_factor, size=affinities[noise_slc].shape))
-        #
-        # # smart_GT_noise = np.absolute(np.random.normal(scale= np.abs(affinities[noise_slc] - true_merges.astype('float32')) * noise_factor, size=affinities[noise_slc].shape)) * np.logical_not(true_merges)
-        #
-        # # smart_noise_full = smart_noise_affs + smart_GT_noise
-        # smart_noise_full = smart_noise_affs
-        #
-        # from scipy.ndimage.filters import gaussian_filter, median_filter
-        # for aff_nb in range(smart_noise_full.shape[0]):
-        #     for z_slice in range(smart_noise_full.shape[1]):
-        #         smart_noise_full[aff_nb, z_slice] = median_filter(smart_noise_full[aff_nb,z_slice], 4)
-        # affinities[noise_slc] += smart_noise_full
-        #
-        # affinities = np.clip(affinities, 0., 1.)
-        #
-        # # Add back some noise to the extremes:
-        # affinities += np.random.normal(scale=0.00001, size=affinities.shape)
-        # min_affs, max_affs = affinities.min(), affinities.max()
-        # if min_affs < 0:
-        #     affinities -= min_affs
-        # if max_affs > 1.0:
-        #     affinities /= max_affs
-        #
-        #
-        # vigra.writeHDF5(affinities[noise_slc], temp_file, 'affs_mod')
-        #
-        #
-        # affinities[noise_slc] = vigra.readHDF5(temp_file, 'affs_mod')
-
-
-    # # Add back some noise to the extremes:
-    # affinities += np.random.normal(scale=0.00001, size=affinities.shape)
-    # min_affs, max_affs = affinities.min(), affinities.max()
-    # if min_affs < 0:
-    #     affinities -= min_affs
-    # if max_affs > 1.0:
-    #     affinities /= max_affs
 
     config_path = os.path.join(get_hci_home_path(), "pyCharm_projects/longRangeAgglo/experiments/cremi/configs")
 
@@ -287,7 +222,8 @@ def get_segmentation(affinities, GT, dataset, sample, crop_slice, sub_crop_slice
 
     print("Starting prediction...")
     tick = time.time()
-    pred_segm, out_dict = post_proc_solver(affinities)
+
+    pred_segm, out_dict = post_proc_solver(affinities, GT != 0)
     MC_energy = out_dict['MC_energy']
     if save_UCM:
         UCM, mergeTimes = out_dict['UCM'], out_dict['mergeTimes']
@@ -947,22 +883,23 @@ if __name__ == '__main__':
         global additional_model_keys
 
         nb_threads_pool = 1
-        from_superpixels = False
+        from_superpixels = True
         use_multicut = False
         add_smart_noise = True
         save_segm = False
         WS_growing = True
-        LONG_RANGE_EDGE_PROBABILITY = 0.0
+        LONG_RANGE_EDGE_PROBABILITY = 1.0
         NOISE_FACTORS = [0.]
         # additional_model_keys = ['smart_noise_exp_merge_only_local']
-        additional_model_keys = ['different_noise_shortEdges']
+        # additional_model_keys = ['different_noise_shortEdges']
+        additional_model_keys = ['debug_exp']
         # additional_model_keys = ['smart_noise_exp_merge_allLong_fromSP']
 
         # TODO: noise, save, crop
         for _ in range(1):
             # Generate noisy affinities:
             print("Generating noisy affs...")
-            for crop in range(5, 6):  # Deep-z: 5       MC: 4   All: 0:4
+            for crop in range(0, 1):  # Deep-z: 5       MC: 4   All: 0:4
                 for sub_crop in range(5, 6):  # Deep-z: 5     MC: 6  All: 4 Tiny: 5
                     affinities, GT = get_dataset_data("CREMI", "B", CREMI_crop_slices["B"][crop],
                                                       run_connected_components=False)
@@ -1003,7 +940,7 @@ if __name__ == '__main__':
                 #               "C": range(2,3)}
 
                 # for crop in crop_range[sample]:  # Deep-z: 5       MC: 4   All: 0:4
-                for crop in range(5, 6):  # Deep-z: 5       MC: 4   All: 0:4
+                for crop in range(0, 1):  # Deep-z: 5       MC: 4   All: 0:4
                     for sub_crop in range(5, 6):  # Deep-z: 5     MC: 6  All: 4 Tiny: 5
                         if all_affinities_blocks[sample][crop][sub_crop] is None:
                             # Load data:
@@ -1018,7 +955,7 @@ if __name__ == '__main__':
                             all_GT_blocks[sample][crop][sub_crop] = GT
 
                         for local_attr in [False]:
-                            for agglo in ['MEAN']:
+                            for agglo in ['MEAN_constr']:
                             # for agglo in ['MAX', 'greedyFixation', 'MEAN_constr', 'GAEC', 'MEAN']:
                                 # for agglo in ['MEAN_constr', 'MAX', 'MEAN']:
                                 # for agglo in ['MEAN', 'MAX', 'greedyFixation', 'GAEC', 'MEAN_constr']:

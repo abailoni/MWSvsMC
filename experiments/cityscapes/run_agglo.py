@@ -56,8 +56,10 @@ def combine_crop_slice_str(crop_str, subcrop_str):
 
 
 
-def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
+def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save_UCM,
                      from_superpixels=False, use_multicut=False):
+    edge_prob = 1.
+    THRESH = input_model_keys[0]
 
     inst_out_file = image_path.replace(
         '.input.h5', '.output.h5')
@@ -67,17 +69,21 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     # TODO: 1
     # NAME_AGGLO = "orig_affs"
     # THRESH = 'thresh030'
-    NAME_AGGLO = "finetuned_affs"
-    THRESH = 'thresh050'
-    # NAME_AGGLO = "finetuned_affs_avg"
+    # NAME_AGGLO = "finetuned_affs"
+    # THRESH = 'thresh050'
+    NAME_AGGLO = "finetuned_affs_avg"
     # THRESH = 'thresh050'
 
     # inner_path = agglo + "_avg_retrained_bal_affs_thresh050"
-    inner_path = "{}_{}_{}".format(agglo, NAME_AGGLO, THRESH)
+    partial_path = ""
+    for key in input_model_keys:
+        partial_path += "_{}".format(key)
+    inner_path = "{}_{}{}".format(agglo, NAME_AGGLO, partial_path)
     # inner_path = "{}_orig_affs_thresh030".format(agglo)
+    # print(inner_path)
 
     model_keys = [agglo] if not local_attraction else [agglo, "impose_local_attraction"]
-    model_keys += [THRESH]
+    model_keys += input_model_keys
 
     already_exists = True
     with h5py.File(inst_out_file, 'r') as f:
@@ -97,8 +103,8 @@ def get_segmentation(image_path, edge_prob, agglo, local_attraction, save_UCM,
     with h5py.File(image_path, 'r') as f:
         # TODO: 2
         # affinities = f['instance_affinities'][:]
-        affinities = f['finetuned_affs_noAvg'][:]
-        # affinities = f['finetuned_affs'][:]
+        # affinities = f['finetuned_affs_noAvg'][:]
+        affinities = f['finetuned_affs'][:]
 
 
         # shape = f['shape'][:]
@@ -334,25 +340,40 @@ if __name__ == '__main__':
     for _ in range(1):
         for path in all_images_paths:
             for local_attr in [False]:
-                for agglo in ['MEAN_constr', 'MEAN']:
-                # for agglo in ['MAX']:
-                # for agglo in ['MEAN_constr']:
-                # for agglo in ['MEAN_constr', 'MEAN', 'MutexWatershed', 'greedyFixation', 'GAEC',
-                #               'CompleteLinkage', 'CompleteLinkagePlusCLC', 'SingleLinkage', 'SingleLinkagePlusCLC']:
-                    if local_attr and agglo in ['greedyFixation', 'GAEC']:
-                        continue
-                    # for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 17), np.linspace(0.11, 0.8, 18))):
-                    for edge_prob in [1.]:
-                        all_paths_to_process.append(path)
-                        all_local_attr.append(local_attr)
-                        all_agglo_type.append(agglo)
-                        all_edge_prob.append(edge_prob)
-                        saveUCM = True if edge_prob > 0.0999 and edge_prob < 0.1001 and agglo != 'MAX' else False
-                        saveUCM = False
-                        if saveUCM and not check:
-                            print("UCM scheduled!")
-                            check = True
-                        all_UCM.append(saveUCM)
+                for agglo, edge_prob, use_log_costs in [
+                    # ["MEAN", "thresh030", False],
+                    # ["MEAN", "thresh035", True],
+                    # ["MEAN_constr", "thresh035", False],
+                    # ["MEAN_constr", "thresh035", True],
+                    # ["GAEC", "thresh035", False],
+                    # ["GAEC", "thresh035", True],
+                    ["MEAN_constr", "thresh030", False],
+                    ["MEAN_constr", "thresh025", False],
+                    ["MEAN_constr", "thresh020", False],
+                    ["MEAN_constr", "thresh040", False],
+                ]:
+                    # for agglo in ['MEAN']:
+                    # for agglo in ['MAX']:
+                    # for agglo in ['MEAN_constr']:
+                    # for agglo in ['MEAN_constr', 'MEAN', 'MutexWatershed', 'greedyFixation', 'GAEC',
+                    #               'CompleteLinkage', 'CompleteLinkagePlusCLC', 'SingleLinkage', 'SingleLinkagePlusCLC']:
+                    #     if local_attr and agglo in ['greedyFixation', 'GAEC']:
+                    #         continue
+                    #     # for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 17), np.linspace(0.11, 0.8, 18))):
+                    #     for edge_prob in ['thresh040', 'thresh045', 'thresh035']:
+                    edge_prob = [edge_prob, "use_log_costs"] if use_log_costs else [edge_prob, "dont_use_log_costs"]
+
+                    all_paths_to_process.append(path)
+                    all_local_attr.append(local_attr)
+                    all_agglo_type.append(agglo)
+                    all_edge_prob.append(edge_prob)
+                    # saveUCM = True if edge_prob > 0.0999 and edge_prob < 0.1001 and agglo != 'MAX' else False
+                    saveUCM = False
+                    if saveUCM and not check:
+                        print("UCM scheduled!")
+                        check = True
+                    all_UCM.append(saveUCM)
+
 
     print("Agglomarations to run: ", len(all_paths_to_process))
 

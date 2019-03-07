@@ -31,6 +31,23 @@ WSDT_kwargs:
   preserve_membrane: True
   sigma_seeds: 0.1
   stacked_2d: True
+  intersect_with_boundary_pixels: True
+  boundary_pixels_kwargs:
+#    # Full CREMI:
+#    boundary_threshold: 0.4 # 1.0 all boundary, 0.0 no boundary
+#    used_offsets: [0, 1, 2, 4, 5, 7, 8]
+#    offset_weights: [1., 1., 1., 1., 1., 0.9, 0.9]
+    # Noise experiments:
+    boundary_threshold: 0.6
+    used_offsets: [0, 1, 2, 4, 5, 7, 8, 10, 11]
+    offset_weights: [1., 1., 1., 1., 1., 0.9, 0.9, 0.9, 0.9]
+
+#    # Full CREMI:
+#    mask1 = (affinities[[0,1,2,4,5]] < 0.3).max(axis=0)
+#    mask2 = (affinities[[7,8]] < 0.04).max(axis=0)
+#    # Small noise experiments:
+#    # mask1 = (affinities[[0, 1, 2, 4, 5]] < 0.6).max(axis=0)
+#    # mask2 = (affinities[[7, 8, 10, 11]] < 0.2).max(axis=0)
 
 prob_map_kwargs:
 #    offset_weights: [1.0, 1.0, 0.8, 0.8, 0.8, 0.8]

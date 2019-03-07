@@ -67,6 +67,22 @@ GAEC:
 #        verbose: True
 #        printNth: 1000000
 
+use_log_costs:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          use_log_costs: True
+
+dont_use_log_costs:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          use_log_costs: False
+
 MEAN_constr:
   parent_model: ['gen_HC']
   postproc:
@@ -538,7 +554,26 @@ differentInfer:
 
 
 
-
+thresh020:
+  postproc:
+    MWS_kwargs:
+      bias: 0.20
+    multicut_kwargs:
+      beta: 0.20
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          threshold: 0.2
+thresh025:
+  postproc:
+    MWS_kwargs:
+      bias: 0.25
+    multicut_kwargs:
+      beta: 0.25
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          threshold: 0.25
 
 thresh030:
   postproc:
