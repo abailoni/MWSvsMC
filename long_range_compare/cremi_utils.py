@@ -91,6 +91,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     tick = time.time()
 
     if from_superpixels:
+        print(np.unique(GT))
         pred_segm, out_dict = post_proc_solver(affinities, GT != 0)
     else:
         pred_segm, out_dict = post_proc_solver(affinities)
@@ -166,6 +167,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
 
     extra_agglo = post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['extra_aggl_kwargs']
     if use_multicut:
+        raise DeprecationWarning
         agglo_type = "max"
         non_link = False
     else:
@@ -174,7 +176,11 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
 
 
     # MWS in affogato could make problems... (and we also renormalize indices)
-    pred_segm = vigra.analysis.labelVolume(pred_segm.astype('uint32'))
+    pred_segm = vigra.analysis.relabelConsecutive(pred_segm.astype('uint64'))[0]
+    if pred_segm.max() > np.uint32(-1):
+        print("!!!!!!!!!WARNING!!!!!!!!!! uint32 limit reached!")
+    else:
+        pred_segm = vigra.analysis.labelVolumeWithBackground(pred_segm.astype('uint32'))
 
     if post_proc_config.get('thresh_segm_size', 0) != 0 and WS_growing:
         grow = SizeThreshAndGrowWithWS(post_proc_config['thresh_segm_size'],
@@ -223,7 +229,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
         evals = cremi_score(GT, pred_segm, border_threshold=None, return_all_scores=True)
         evals_WS = cremi_score(GT, pred_segm_WS, border_threshold=None, return_all_scores=True)
         print("Scores achieved ({} - {} - {}): ".format(agglo_type,non_link, noise_factor), evals_WS)
-        new_results.update({'energy': np.asscalar(MC_energy), 'score': evals, 'score_WS': evals_WS, 'runtime': comp_time})
+        new_results.update({'energy': np.asscalar(MC_energy), 'score': evals, 'score_WS': evals_WS, 'runtime': out_dict['runtime']})
 
     check_dir_and_create(os.path.join(experiment_dir_path, 'scores'))
     result_file = os.path.join(experiment_dir_path, 'scores', '{}_{}_{}_{}.json'.format(ID,sample,agglo_type,non_link))
@@ -235,7 +241,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     if save_segm:
         check_dir_and_create(os.path.join(experiment_dir_path, 'out_segms'))
         export_file = os.path.join(experiment_dir_path, 'out_segms', '{}_{}_{}_{}.h5'.format(ID, sample, agglo_type, non_link))
-        print(export_file)
+        print('{}/out_segms/{}_{}_{}_{}.h5'.format(experiment_name, ID, sample, agglo_type, non_link))
         vigra.writeHDF5(pred_segm_WS.astype('uint64'), export_file, 'segm_WS')
         vigra.writeHDF5(pred_segm.astype('uint64'), export_file, 'segm')
 
@@ -363,13 +369,9 @@ def get_block_data_lists():
     len_cremi_sub_slices = len(CREMI_sub_crops_slices)
 
     affinities_blocks = {
-        "A": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
-        "B": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
-        "C": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)], }
+        smpl: [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)] for smpl in CREMI_crop_slices}
     GT_blocks = {
-        "A": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
-        "B": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)],
-        "C": [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)], }
+        smpl: [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)] for smpl in CREMI_crop_slices}
 
     return affinities_blocks, GT_blocks
 
@@ -397,6 +399,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
         affinities_blocks, GT_blocks = get_block_data_lists()
 
         for sample in iter_collected['sample']:
+            print("Loading...")
             # ----------------------------------------------------------------------
             # Load data (and possibly add noise or select long range edges):
             # ----------------------------------------------------------------------
@@ -440,6 +443,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
             # ----------------------------------------------------------------------
             # Create iterators:
             # ----------------------------------------------------------------------
+            print("Creating pool instances...")
             for crop in iter_collected['crop']:
                 for sub_crop in iter_collected['subcrop']:
                     assert affinities_blocks[sample][crop][sub_crop] is not None

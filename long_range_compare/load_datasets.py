@@ -23,15 +23,27 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
         # -----------------
         # Load CREMI dataset:
         # -----------------
-        assert sample in ["A", "B", "C"]
-        cremi_path = os.path.join(home_path, "datasets/cremi/SOA_affinities/")
-        dt_path = os.path.join(cremi_path, "sample{}_train.h5".format(sample))
-        inner_path_GT = "segmentations/groundtruth_fixed_OLD" if sample == "B" else "segmentations/groundtruth_fixed"
-        inner_path_raw = "raw_old" if sample == "B" else "raw"
-        inner_path_affs = "predictions/full_affs"
+        if sample in ["A", "B", "C"]:
+            cremi_path = os.path.join(home_path, "datasets/cremi/SOA_affinities/")
+            dt_path = os.path.join(cremi_path, "sample{}_train.h5".format(sample))
+            inner_path_GT = "segmentations/groundtruth_fixed_OLD" if sample == "B" else "segmentations/groundtruth_fixed"
+            inner_path_raw = "raw_old" if sample == "B" else "raw"
+            inner_path_affs = "predictions/full_affs"
+        elif sample in ["A+", "B+", "C+"]:
+            dt_path = os.path.join(get_trendytukan_drive_path(),
+                             "datasets/CREMI/constantin_affs/test_samples/sample{}_cropped_plus_mask.h5".format(sample))
+            inner_path_affs = "affinities"
+            inner_path_GT = "volumes/labels/mask"
+        else:
+            raise NotImplementedError
         with h5py.File(dt_path, 'r') as f:
             GT = f[inner_path_GT][crop_slice[1:]]
+            # FIXME: clean mask
+            ignore_mask_border = GT > np.uint64(-10)
+            GT[ignore_mask_border] = 0
             affs = f[inner_path_affs][crop_slice]
+            # FIXME: convert to float32 and invert
+            affs = 1. - affs.astype('float32') / 255.
             # raw = f[inner_path_raw][crop_slice[1:]]
     elif dataset == 'ISBI':
         # -----------------
@@ -118,7 +130,10 @@ CREMI_crop_slices = {
             ":, 62: 93, 70: 1370, 125: 1425",
             ":, 93: 124,:1300, -1300:",
             ":, :, 70:1450, 95:1425",
-    ]
+    ],
+    "A+": [":, :, :, :"],
+    "B+": [":, :, :, :"],
+    "C+": [":, :, :, :"],
 }
 
 CREMI_sub_crops_slices = [":,2:, 100:600, 100:600",

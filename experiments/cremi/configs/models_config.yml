@@ -22,13 +22,17 @@ gen_HC_pix:
 
 debug_postproc:
   postproc:
-    data_slice:
-      A: ':, 20:25, 200:1230, 200:1230'
-      B: ':, 20:25, 200:1230, 200:1230'
-      C: ':, 20:25, 200:1230, 200:1230'
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        debug: True
+#    data_slice:
+#      A: ':, 20:25, 200:1230, 200:1230'
+#      B: ':, 20:25, 200:1230, 200:1230'
+#      C: ':, 20:25, 200:1230, 200:1230'
 #      A: ':, 20:32, :, :'
 #      B: ':, 20:32, :, :'
 #      C: ':, 20:32, :, :'
+
 
 all_long_range_edges:
   postproc:

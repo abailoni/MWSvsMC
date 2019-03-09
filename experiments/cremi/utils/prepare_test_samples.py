@@ -15,35 +15,35 @@ sys.path += [
 os.path.join(get_hci_home_path(), "python_libraries/cremi_tools"),]
 
 
-original_pad = ((37, 38), (911, 911), (911, 911))
+# original_pad = ((37, 38), (911, 911), (911, 911))
 
-original_pad = ((37, 38), (911, 911), (911, 911))
 slice_original_pad = (slice(37, -38), slice(911, -911), slice(911, -911))
+slice_GT_mask = (slice(36, -37), slice(890, -890), slice(890, -980))
 padded_shape = (200, 3072, 3072)
 
-sample = "A"
+for sample in ["B+", "C+"]:
 
-test_sample_path = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/constantin_affs/test_samples/sample{}+.h5".format(sample))
+    test_sample_path = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/constantin_affs/test_samples/sample{}.h5".format(sample))
 
-raw_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/official_test_samples/sample_{}+_padded_20160601.hdf".format(sample))
-out_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/alignment_experiments/sample_{}+_aligned.hdf".format(sample))
+    raw_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/official_test_samples/sample_A+_padded_20160601.hdf")
+    out_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/alignment_experiments/sample_{}_aligned.hdf".format(sample))
 
-import h5py
-GT_mask_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/alignment_experiments/sample_{}+_GT_mask.hdf".format(sample))
-mask_inner_path = "volumes/labels/mask"
-GT_box = np.zeros(padded_shape, dtype="uint32")
-GT_box[slice_original_pad] = 1
+    import h5py
+    GT_mask_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/alignment_experiments/sample_{}_GT_mask.hdf".format(sample))
+    mask_inner_path = "volumes/labels/mask"
+    GT_box = np.zeros(padded_shape, dtype="uint32")
+    GT_box[slice_GT_mask] = 1
 
-with h5py.File(GT_mask_file, 'w') as f:
-    f[mask_inner_path] = GT_box
+    with h5py.File(GT_mask_file, 'w') as f:
+        f[mask_inner_path] = GT_box
 
-from cremi_tools.alignment import realign
+    from cremi_tools.alignment import realign
 
 
-GT_mask_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/alignment_experiments/sample_{}+_backaligned.hdf".format(sample))
+    # GT_mask_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/alignment_experiments/sample_{}_backaligned.hdf".format(sample))
 
-realign(raw_file,
-            "A+",
-            out_file,
-            labels_file=GT_mask_file,
-            labels_key=mask_inner_path)
+    realign(raw_file,
+                sample,
+                out_file,
+                labels_file=GT_mask_file,
+                labels_key=mask_inner_path)

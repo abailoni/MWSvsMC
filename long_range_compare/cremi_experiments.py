@@ -57,3 +57,41 @@ class DebugExp(CremiExperiment):
                                                  init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
 
         return kwargs_iter, nb_threads_pool
+
+
+class FullTestSamples(CremiExperiment):
+    def __init__(self, *super_args, **super_kwargs):
+        super(FullTestSamples, self).__init__(*super_args, **super_kwargs)
+
+        self.fixed_kwargs.update({
+            "dataset": "CREMI",
+            "from_superpixels": True,
+            "use_multicut": False,
+            "save_segm": True,
+            "WS_growing": False,
+            "edge_prob": 0.1,
+            # "sample": "B",
+            "experiment_name": "FullTestSamples",
+            "local_attraction": False,
+            "additional_model_keys": ["debug_postproc"],
+            "compute_scores": False,
+            "save_UCM": False,
+            "noise_factor": 0.
+        })
+
+        self.kwargs_to_be_iterated.update({
+            'agglo': ["MutexWatershed", "MEAN_constr"],
+            'sample': ["B+"]
+            # 'sample': ["B+", "A+", "C+"]
+        })
+
+    def get_data(self, kwargs_iter=None):
+        nb_threads_pool = 1
+        nb_iterations = 1
+
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(6, 7),
+                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+
+        return kwargs_iter, nb_threads_pool
+
+
