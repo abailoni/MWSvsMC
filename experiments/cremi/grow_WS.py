@@ -1,6 +1,8 @@
 # Add missing package-paths:
 import long_range_compare
 
+# FIXME: outdated spaghetti code, update
+
 import vigra
 import os
 

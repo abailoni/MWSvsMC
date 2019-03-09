@@ -67,6 +67,22 @@ GAEC:
 #        verbose: True
 #        printNth: 1000000
 
+use_log_costs:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          use_log_costs: True
+
+dont_use_log_costs:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          use_log_costs: False
+
 MEAN_constr:
   parent_model: ['gen_HC']
   postproc:
@@ -87,27 +103,49 @@ MEAN:
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
-remove_small:
-  parent_model: ['gen_HC']
-  postproc:
-    generalized_HC_kwargs:
-      agglomeration_kwargs:
-        extra_aggl_kwargs:
-          remove_small_segments: True
-          small_segments_thresh: 4
-
-#MAX:
+#remove_small:
 #  parent_model: ['gen_HC']
 #  postproc:
 #    generalized_HC_kwargs:
 #      agglomeration_kwargs:
 #        extra_aggl_kwargs:
-#          update_rule: 'max'
-#          add_cannot_link_constraints: False
-##          remove_small_segments: True
-##          small_segments_thresh: 200
+#          remove_small_segments: True
+#          small_segments_thresh: 4
 
-MAX:
+MutexWatershed:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'MutexWatershed'
+          add_cannot_link_constraints: False
+#          remove_small_segments: True
+#          small_segments_thresh: 200
+
+CompleteLinkage:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'min'
+          add_cannot_link_constraints: False
+#          remove_small_segments: True
+#          small_segments_thresh: 200
+
+CompleteLinkagePlusCLC:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'min'
+          add_cannot_link_constraints: True
+#          remove_small_segments: True
+#          small_segments_thresh: 200
+
+SingleLinkage:
   parent_model: ['gen_HC']
   postproc:
     generalized_HC_kwargs:
@@ -118,6 +156,16 @@ MAX:
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
+SingleLinkagePlusCLC:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'max'
+          add_cannot_link_constraints: True
+#          remove_small_segments: True
+#          small_segments_thresh: 200
 
 greedyFixation:
   parent_model: ['gen_HC']
