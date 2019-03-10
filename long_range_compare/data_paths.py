@@ -8,7 +8,7 @@ def get_hci_home_path():
         return '/net/hciserver03/storage/abailoni/'
     elif hostname == 'trendytukan' and username == 'abailoni_local':
         return '/home/abailoni_local/hci_home/'
-    elif hostname == 'ialgpu01' or hostname == 'birdperson':
+    elif hostname == 'ialgpu01' or hostname == 'birdperson' or hostname == 'sirherny':
         return '/home/abailoni/hci_home/'
     else:
         return '/net/hciserver03/storage/abailoni/'
@@ -20,7 +20,7 @@ def get_trendytukan_drive_path():
         return '/mnt/localdata0/abailoni/'
     elif hostname == 'trendytukan' and username == 'abailoni_local':
         return '/home/abailoni_local/trendyTukan_localdata0/'
-    elif hostname == 'ialgpu01' or hostname == 'birdperson':
+    elif hostname == 'ialgpu01' or hostname == 'birdperson' or hostname == 'sirherny':
         return '/home/abailoni/trendyTukan_drive/'
     else:
         return '/net/hciserver03/storage/abailoni/trendyTukan_drive/'

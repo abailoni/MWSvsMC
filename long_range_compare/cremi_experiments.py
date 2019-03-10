@@ -80,7 +80,8 @@ class FullTestSamples(CremiExperiment):
         })
 
         self.kwargs_to_be_iterated.update({
-            'agglo': ["MutexWatershed", "MEAN_constr"],
+            # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
+            'agglo': ["MEAN_constr", "GAEC", "greedyFixation"],
             'sample': ["B+"]
             # 'sample': ["B+", "A+", "C+"]
         })

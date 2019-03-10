@@ -437,7 +437,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
                                                                                                    mod='merge-bias',
                                                                                                    target_affs='short')
                         else:
-                            affinities_blocks[sample][crop][sub_crop][noise] = np.copy(affinities)
+                            affinities_blocks[sample][crop][sub_crop][noise] = affinities
                         # vigra.writeHDF5(all_affinities_blocks[sample][crop][sub_crop][noise], temp_file, '{:.4f}'.format(noise))
 
             # ----------------------------------------------------------------------

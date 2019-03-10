@@ -25,7 +25,7 @@ for sample in ["B+", "C+"]:
 
     test_sample_path = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/constantin_affs/test_samples/sample{}.h5".format(sample))
 
-    raw_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/official_test_samples/sample_A+_padded_20160601.hdf")
+    raw_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/official_test_samples/sample_{}_padded_20160601.hdf".format(sample))
     out_file = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/alignment_experiments/sample_{}_aligned.hdf".format(sample))
 
     import h5py

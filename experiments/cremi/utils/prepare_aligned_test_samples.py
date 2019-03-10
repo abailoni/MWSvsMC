@@ -61,8 +61,8 @@ for sample in ["B+", "C+"]:
         affs_crop_slice = (slice(None), ) + crop_slice
         affs = f[affs_inner_path][affs_crop_slice]
 
-    # with h5py.File(source_path, 'r') as f:
-    #     raw = f["volumes/raw"][crop_slice]
+    with h5py.File(source_path, 'r') as f:
+        raw = f["volumes/raw"][crop_slice]
 
 
     with h5py.File(target_path, 'w') as f:
@@ -70,4 +70,4 @@ for sample in ["B+", "C+"]:
         # TODO: save crop slice!
         # f["crop_slice"] = crop
         f["affinities"] = affs
-        # f["volumes/raw"] = raw
+        f["volumes/raw"] = raw
