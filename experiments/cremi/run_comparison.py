@@ -18,7 +18,7 @@ from segmfriends.utils.various import starmap_with_kwargs
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--exp_name', type=str, default="FullTestSamples")  #DebugExp
+    parser.add_argument('--exp_name', type=str, default="NoiseExperiment")  #DebugExp
     parser.add_argument('--project_directory', default="projects/agglo_cluster_compare",  type=str)
     # TODO: option to pass some other fixed kwargs and overwrite it...?
 

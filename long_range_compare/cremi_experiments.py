@@ -95,4 +95,38 @@ class FullTestSamples(CremiExperiment):
 
         return kwargs_iter, nb_threads_pool
 
+class NoiseExperiment(CremiExperiment):
+    def __init__(self, *super_args, **super_kwargs):
+        super(NoiseExperiment, self).__init__(*super_args, **super_kwargs)
+
+        self.fixed_kwargs.update({
+            "dataset": "CREMI",
+            "from_superpixels": False,
+            "use_multicut": False,
+            "save_segm": False,
+            "WS_growing": False,
+            "edge_prob": 0.1,
+            "sample": "B",
+            "experiment_name": "noise",
+            "local_attraction": False,
+            # "additional_model_keys": ["debug_postproc"],
+            "compute_scores": True,
+            "save_UCM": False,
+            "noise_factor": 0.
+        })
+        self.kwargs_to_be_iterated.update({
+            # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
+            'agglo': ["MEAN"],
+            # 'sample': ["B"]
+            # 'sample': ["B+", "A+", "C+"]
+        })
+
+    def get_data(self, kwargs_iter=None):
+        nb_threads_pool = 1
+        nb_iterations = 1
+
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(5, 6),
+                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+
+        return kwargs_iter, nb_threads_pool
 

@@ -27,7 +27,8 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
                      local_attraction=False,
                      save_UCM=False,
                      from_superpixels=True, use_multicut=False, noise_factor=0.,
-                     save_segm=False, WS_growing=True, additional_model_keys=None, compute_scores=True):
+                     save_segm=False, WS_growing=True, additional_model_keys=None, compute_scores=True,
+                   mask_used_edges=None):
     # TODO: add experiment folder!
     # TODO: simplify/generalize function and move to segmfriends
 
@@ -51,7 +52,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     if use_multicut:
         post_proc_config['multicut_kwargs']['offsets_probabilities'] = edge_prob
     post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['return_UCM'] = save_UCM
-    # post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['random_edge_probabilities'] = np.ones_like(affinities)*0.5
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['mask_used_edges'] = mask_used_edges
 
     n_threads = post_proc_config.pop('nb_threads')
     invert_affinities = post_proc_config.pop('invert_affinities', False)
@@ -91,7 +92,6 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     tick = time.time()
 
     if from_superpixels:
-        print(np.unique(GT))
         pred_segm, out_dict = post_proc_solver(affinities, GT != 0)
     else:
         pred_segm, out_dict = post_proc_solver(affinities)
@@ -370,10 +370,13 @@ def get_block_data_lists():
 
     affinities_blocks = {
         smpl: [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)] for smpl in CREMI_crop_slices}
+    masks_used_edges_blocks = {
+        smpl: [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)] for smpl in
+    CREMI_crop_slices}
     GT_blocks = {
         smpl: [[None for _ in range(len_cremi_sub_slices)] for _ in range(len_cremi_slices)] for smpl in CREMI_crop_slices}
 
-    return affinities_blocks, GT_blocks
+    return affinities_blocks, masks_used_edges_blocks, GT_blocks
 
 
 def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
@@ -396,7 +399,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
             raise ValueError("Iter key {} was not passed!".format(key))
 
     for _ in range(nb_iterations):
-        affinities_blocks, GT_blocks = get_block_data_lists()
+        affinities_blocks, masks_used_edges_blocks, GT_blocks = get_block_data_lists()
 
         for sample in iter_collected['sample']:
             print("Loading...")
@@ -425,20 +428,27 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
 
                     GT_blocks[sample][crop][sub_crop] = GT
                     affinities_blocks[sample][crop][sub_crop] = {}
-                    for noise in iter_collected['noise_factor']:
-                        # TODO: this needs to be generalized for more noise options
-                        # TODO: generate random probs long range edges
-                        # all_affinities_blocks[sample][crop][sub_crop][noise] = np.copy(affinities)
-                        # all_affinities_blocks[sample][crop][sub_crop][noise] = vigra.readHDF5(temp_file,
-                        #                 '{:.4f}'.format(noise))
-                        if noise != 0.:
-                            affinities_blocks[sample][crop][sub_crop][noise] = add_smart_noise_to_affs(affinities,
-                                                                                                   scale_factor=noise,
-                                                                                                   mod='merge-bias',
-                                                                                                   target_affs='short')
-                        else:
-                            affinities_blocks[sample][crop][sub_crop][noise] = affinities
-                        # vigra.writeHDF5(all_affinities_blocks[sample][crop][sub_crop][noise], temp_file, '{:.4f}'.format(noise))
+                    masks_used_edges_blocks[sample][crop][sub_crop] = {}
+                    for long_range_prob in iter_collected['edge_prob']:
+                        for noise in iter_collected['noise_factor']:
+                            # TODO: this needs to be generalized for more noise options
+                            # TODO: generate random probs long range edges
+                            # all_affinities_blocks[sample][crop][sub_crop][noise] = np.copy(affinities)
+                            # all_affinities_blocks[sample][crop][sub_crop][noise] = vigra.readHDF5(temp_file,
+                            #                 '{:.4f}'.format(noise))
+                            if noise != 0.:
+                                affinities_blocks[sample][crop][sub_crop][noise] = add_smart_noise_to_affs(affinities,
+                                                                                                       scale_factor=noise,
+                                                                                                       mod='merge-bias',
+                                                                                                       target_affs='short')
+                            else:
+                                affinities_blocks[sample][crop][sub_crop][noise] = affinities
+                            # vigra.writeHDF5(all_affinities_blocks[sample][crop][sub_crop][noise], temp_file, '{:.4f}'.format(noise))
+
+                            # Fix already long-range edges that will be in the graph:
+                            if long_range_prob < 1.0 and long_range_prob > 0.0:
+                                masks_used_edges_blocks[sample][crop][sub_crop][long_range_prob] = np.random.random(affinities.shape) >= long_range_prob
+
 
             # ----------------------------------------------------------------------
             # Create iterators:
@@ -466,7 +476,8 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
                                         'crop_slice': CREMI_crop_slices[sample][crop],
                                         'sub_crop_slice': CREMI_sub_crops_slices[sub_crop],
                                         'affinities': affinities_blocks[sample][crop][sub_crop][noise],
-                                        'GT': GT_blocks[sample][crop][sub_crop]
+                                        'GT': GT_blocks[sample][crop][sub_crop],
+                                        'mask_used_edges': masks_used_edges_blocks[sample][crop][sub_crop].get(edge_prob, None)
                                     }
                                     new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
 
