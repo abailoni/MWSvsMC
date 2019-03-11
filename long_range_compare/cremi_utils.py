@@ -205,6 +205,9 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
 
     # Save config setup:
     new_results = {}
+
+    if mask_used_edges is not None:
+        post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs'].pop('mask_used_edges')
     new_results['postproc_config'] = post_proc_config
 
     # TODO: delete this crap
@@ -256,6 +259,64 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
         save_UCM_video('{}_{}_{}_{}'.format(ID, sample, agglo_type, non_link), UCM_folder,
                        selected_offset=1, selected_slice=0, nb_frames=100,
                        postfix="allow_merge", final_segm=pred_segm_WS)
+
+
+
+def grow_WS(json_filename, config_dict, project_directory, experiment_name):
+    if config_dict["WS_growing"]:
+        return
+
+    experiment_dir_path = os.path.join(project_directory, experiment_name)
+    export_file = os.path.join(experiment_dir_path, 'out_segms', json_filename.replace('.json', '.h5'))
+    if not os.path.exists(export_file):
+        return
+
+
+    post_proc_config = config_dict['postproc_config']
+    offsets = get_dataset_offsets("CREMI")
+
+    # Load affinities:
+    print("Loading ", json_filename)
+    affinities, _ = get_dataset_data("CREMI", config_dict["sample"], config_dict["crop"],
+                                      run_connected_components=False)
+    pred_segm = vigra.readHDF5(export_file, "segm")
+
+    grow = SizeThreshAndGrowWithWS(post_proc_config['thresh_segm_size'],
+             offsets,
+             hmap_kwargs=post_proc_config['prob_map_kwargs'],
+             apply_WS_growing=True,
+             size_of_2d_slices=True,
+                                   with_background=True)
+
+
+
+    print("Computing WS ")
+    pred_segm_WS = grow(affinities, pred_segm)
+
+    # TODO: add option to compute scores
+    # evals_WS = cremi_score(GT, pred_segm_WS, border_threshold=None, return_all_scores=True)
+    # print("Scores achieved ({} - {} - {}): ".format(agglo_type, non_link, noise_factor), evals_WS)
+    # new_results.update(
+    #     {'energy': np.asscalar(MC_energy), 'score': evals, 'score_WS': evals_WS, 'runtime': out_dict['runtime']})
+
+    # ------------------------------
+    # SAVING RESULTS:
+    # ------------------------------
+    # TODO: save_growing True, delete old segm, update scores
+
+    vigra.writeHDF5(pred_segm_WS.astype('uint64'), export_file, 'segm_WS')
+
+    # Save config setup:
+    config_dict["WS_growing"] = True
+
+    json_file_path = os.path.join(experiment_dir_path, 'scores', json_filename)
+    with open(json_file_path, 'w') as f:
+        json.dump(config_dict, f, indent=4, sort_keys=True)
+
+
+
+
+
 
 
 def add_smart_noise_to_affs(affinities, scale_factor,

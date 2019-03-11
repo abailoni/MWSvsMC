@@ -38,13 +38,14 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
             raise NotImplementedError
         with h5py.File(dt_path, 'r') as f:
             GT = f[inner_path_GT][crop_slice[1:]]
-            # FIXME: clean mask
-            ignore_mask_border = GT > np.uint64(-10)
-            GT[ignore_mask_border] = 0
             affs = f[inner_path_affs][crop_slice]
-            # FIXME: convert to float32 and invert
-            affs = 1. - affs.astype('float32') / 255.
             # raw = f[inner_path_raw][crop_slice[1:]]
+            if sample in ["A+", "B+", "C+"]:
+                # FIXME: clean mask
+                ignore_mask_border = GT > np.uint64(-10)
+                GT[ignore_mask_border] = 0
+                # FIXME: convert to float32 and invert
+                affs = 1. - affs.astype('float32') / 255.
     elif dataset == 'ISBI':
         # -----------------
         # Load ISBI dataset:
