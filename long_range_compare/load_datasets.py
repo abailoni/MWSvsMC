@@ -145,5 +145,24 @@ CREMI_sub_crops_slices = [":,2:, 100:600, 100:600",
                     ":,:, 200:500, 200:500",
                     # ":,:, 200:500, 200:500",
                     ":,:, :, :",
-                    ":,14:15, 300:900, 300:900"
+                    ":,14:15, 300:900, 300:900",
+                    ":,:30, 200:500, 200:500",
                     ]
+
+# crops_padded_volumes = {
+# "A+": (slice(36, 163, None), slice(1154, 2753, None), slice(934, 2335, None)),
+# "B+": (slice(36, 163, None), slice(1061, 2802, None), slice(1254, 4009, None)),
+# "C+": (slice(36, 163, None), slice(980, 2443, None), slice(1138, 2569, None))
+# }
+crops_padded_volumes = {
+"A+": (slice(36, 163, None), slice(1154, 2753, None), slice(934, 2426, None)),
+"B+": (slice(36, 163, None), slice(1055, 2802, None), slice(1254, 4105, None)),
+"C+": (slice(36, 163, None), slice(980, 2443, None), slice(1138, 2569, None))
+}
+
+
+shape_padded_aligned_datasets = {
+    "A+": (200, 3727, 3505),
+    "B+": (200, 3832, 5455),
+    "C+": (200, 3465, 3668)
+}

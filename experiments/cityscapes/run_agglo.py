@@ -327,8 +327,8 @@ if __name__ == '__main__':
 
     all_images_paths = get_GMIS_dataset(partial=False)
 
-    # global trained_log_regr
-    # trained_log_regr = GMIS_utils.LogRegrModel()
+    global trained_log_regr
+    trained_log_regr = GMIS_utils.LogRegrModel()
 
     all_paths_to_process = []
     all_agglo_type = []

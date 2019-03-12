@@ -18,10 +18,10 @@ os.path.join(get_hci_home_path(), "python_libraries/cremi_tools"),]
 # original_pad = ((37, 38), (911, 911), (911, 911))
 
 slice_original_pad = (slice(37, -38), slice(911, -911), slice(911, -911))
-slice_GT_mask = (slice(36, -37), slice(890, -890), slice(890, -980))
+slice_GT_mask = (slice(36, -37), slice(890, -890), slice(890, -890))
 padded_shape = (200, 3072, 3072)
 
-for sample in ["B+", "C+"]:
+for sample in ["A+", "B+", "C+"]:
 
     test_sample_path = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/constantin_affs/test_samples/sample{}.h5".format(sample))
 

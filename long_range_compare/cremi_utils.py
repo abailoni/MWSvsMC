@@ -5,6 +5,7 @@ import numpy as np
 
 import time
 import json
+import h5py
 
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict, parse_data_slice, check_dir_and_create
@@ -46,7 +47,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
             model_keys += ["gen_HC_DTWS"] #DTWS
     if additional_model_keys is not None:
         model_keys += additional_model_keys
-    configs = adapt_configs_to_model(model_keys, debug=True, **configs)
+    configs = adapt_configs_to_model(model_keys, debug=False, **configs)
     post_proc_config = configs['postproc']
     post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_probabilities'] = edge_prob
     if use_multicut:
@@ -271,6 +272,7 @@ def grow_WS(json_filename, config_dict, project_directory, experiment_name):
     if not os.path.exists(export_file):
         return
 
+    print(json_filename)
 
     post_proc_config = config_dict['postproc_config']
     offsets = get_dataset_offsets("CREMI")
@@ -291,7 +293,11 @@ def grow_WS(json_filename, config_dict, project_directory, experiment_name):
 
 
     print("Computing WS ")
-    pred_segm_WS = grow(affinities, pred_segm)
+    try:
+        pred_segm_WS = grow(affinities, pred_segm)
+    except MemoryError:
+        print("Memory error on ", json_filename)
+        return
 
     # TODO: add option to compute scores
     # evals_WS = cremi_score(GT, pred_segm_WS, border_threshold=None, return_all_scores=True)
@@ -314,6 +320,32 @@ def grow_WS(json_filename, config_dict, project_directory, experiment_name):
         json.dump(config_dict, f, indent=4, sort_keys=True)
 
 
+def delete_segm(json_filename, config_dict, project_directory, experiment_name):
+    if not config_dict["WS_growing"]:
+        return
+
+    experiment_dir_path = os.path.join(project_directory, experiment_name)
+    export_file = os.path.join(experiment_dir_path, 'out_segms', json_filename.replace('.json', '.h5'))
+    if not os.path.exists(export_file):
+        return
+
+    with h5py.File(export_file, 'r') as f:
+        keys = [k for k in f]
+        if "segm" in f and "segm_WS" in f:
+            segm = f["segm_WS"][:]
+        else:
+            return
+
+    # Change type:
+    max_value = segm.max()
+    print(json_filename,"Max value: ", max_value)
+    if (max_value < np.uint16(-10) and segm.min() >= 0):
+        segm = segm.astype('uint16')
+    elif (max_value < np.uint32(-10) and segm.min() >= 0):
+        segm = segm.astype('uint32')
+
+    with h5py.File(export_file, 'w') as f2:
+        f2["segm_WS"] = segm
 
 
 
@@ -424,6 +456,86 @@ def add_smart_noise_to_affs(affinities, scale_factor,
     return affinities
 
 
+def add_opensimplex_noise_to_affs(affinities, scale_factor,
+                            mod='add',
+                            target_affs='all',
+                            seed=None
+                            ):
+    affinities = affinities.copy()
+
+    temp_file = os.path.join(get_hci_home_path(), 'affs_plus_opensimplex_noise.h5')
+    vigra.writeHDF5(affinities.astype('float32'), temp_file, 'affs')
+
+    # import matplotlib.pyplot as plt
+    # from segmfriends import vis as vis
+    # fig, ax = plt.subplots(ncols=2, nrows=1, figsize=(7, 4))
+    # for a in fig.get_axes():
+    #     a.axis('off')
+    # vis.plot_output_affin(ax[0], affinities, 1, 15)
+
+
+
+    if target_affs == 'short':
+        noise_slc = slice(0, 3)
+    elif target_affs == 'long':
+        noise_slc = slice(3, None)
+    elif target_affs == "all":
+        noise_slc = slice(None)
+    else:
+        raise ValueError
+
+
+    def sigmoid(x):
+        return 1. / (1. + np.exp(-x))
+
+    def logit(x, clip=True):
+        if clip:
+            x = add_epsilon(x)
+        return np.log(x / (1. - x))
+
+    def add_epsilon(affs, eps=1e-2):
+        p_min = eps
+        p_max = 1. - eps
+        return (p_max - p_min) * affs + p_min
+
+    # Generate noise:
+    from nifty.graph.rag import generate_opensimplex_noise
+    shape = affinities[noise_slc].shape
+
+    large_ft_size = np.array((1., 3., 50., 50.))
+    large_scale_noise = (generate_opensimplex_noise(shape, seed=seed, features_size=large_ft_size, number_of_threads=8)
+                         +1.0) / 2.0
+    fine_ft_size = np.array((1., 3., 20., 20.))
+    fine_scale_noise = (generate_opensimplex_noise(shape, seed=seed, features_size=fine_ft_size, number_of_threads=8)
+                        + 1.0) / 2.0
+
+    # Combine large and fine features:
+    # TODO: more or simplify?
+    large_scale, fine_scale = 10, 5
+    simplex_noise = (large_scale_noise * large_scale + fine_scale_noise * fine_scale) / (large_scale + fine_scale)
+
+    if mod == "merge-biased":
+        noisy_affs = sigmoid(logit(affinities[noise_slc]) + scale_factor * logit(np.maximum(simplex_noise, 0.5)))
+    elif mod == "split-biased":
+        noisy_affs = sigmoid(logit(affinities[noise_slc]) + scale_factor * logit(np.minimum(simplex_noise, 0.5)))
+    elif mod == "unbiased":
+        noisy_affs = sigmoid(logit(affinities[noise_slc]) + scale_factor * logit(simplex_noise))
+    else:
+        raise ValueError("Accepted mods are add or subtract")
+
+    affinities[noise_slc] = noisy_affs
+
+    # vis.plot_output_affin(ax[1], affinities, 1, 15)
+    # # # vis.plot_output_affin(ax, affinities, nb_offset=16, z_slice=0)
+    # fig.savefig(os.path.join(get_hci_home_path(), "perlin_noise.pdf"))
+
+    vigra.writeHDF5(affinities.astype('float32'), temp_file, 'affs_noisy')
+
+    return affinities
+
+
+
+
 
 def get_block_data_lists():
     len_cremi_slices = max([len(CREMI_crop_slices[smpl]) for smpl in CREMI_crop_slices])
@@ -469,6 +581,9 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
             # ----------------------------------------------------------------------
             for crop in iter_collected['crop']:
                 for sub_crop in iter_collected['subcrop']:
+                    # FIXME:
+                    noise_seed = np.random.randint(-100000, 100000)
+
                     # FIXME: actually cremi is the only supported dataset at the moment (mainly for the crops...)
                     affinities, GT = get_dataset_data(fixed_kwargs['dataset'], sample, CREMI_crop_slices[sample][crop],
                                                       run_connected_components=False)
@@ -487,6 +602,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
                     #
                     # fig.savefig(os.path.join(get_hci_home_path(), "GT_affs.pdf"))
 
+
                     GT_blocks[sample][crop][sub_crop] = GT
                     affinities_blocks[sample][crop][sub_crop] = {}
                     masks_used_edges_blocks[sample][crop][sub_crop] = {}
@@ -498,10 +614,15 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
                             # all_affinities_blocks[sample][crop][sub_crop][noise] = vigra.readHDF5(temp_file,
                             #                 '{:.4f}'.format(noise))
                             if noise != 0.:
-                                affinities_blocks[sample][crop][sub_crop][noise] = add_smart_noise_to_affs(affinities,
-                                                                                                       scale_factor=noise,
-                                                                                                       mod='merge-bias',
-                                                                                                       target_affs='short')
+                                affinities_blocks[sample][crop][sub_crop][noise] = add_opensimplex_noise_to_affs(affinities, noise,
+                                                              mod='split-biased',
+                                                              target_affs='all',
+                                                              seed=noise_seed
+                                                              )
+                                # affinities_blocks[sample][crop][sub_crop][noise] = add_smart_noise_to_affs(affinities,
+                                #                                                                        scale_factor=noise,
+                                #                                                                        mod='merge-bias',
+                                #                                                                        target_affs='short')
                             else:
                                 affinities_blocks[sample][crop][sub_crop][noise] = affinities
                             # vigra.writeHDF5(all_affinities_blocks[sample][crop][sub_crop][noise], temp_file, '{:.4f}'.format(noise))

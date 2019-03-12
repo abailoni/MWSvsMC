@@ -35,7 +35,7 @@ def get_gt_bounding_box(gt):
 # B+ (slice(36, 163, None), slice(1061, 2802, None), slice(1254, 4009, None))
 # C+ (slice(36, 163, None), slice(980, 2443, None), slice(1138, 2569, None))
 
-for sample in ["B+", "C+"]:
+for sample in ["A+", "B+", "C+"]:
 
     affs_path = os.path.join(get_trendytukan_drive_path(), "datasets/CREMI/constantin_affs/test_samples/sample{}.h5".format(sample))
     affs_inner_path = "affinities"
@@ -48,6 +48,7 @@ for sample in ["B+", "C+"]:
     with h5py.File(source_path, 'r') as f:
         mask_GT = f[mask_inner_path][:]
 
+    # print(mask_GT.shape)
     print("Find crop")
     crop_slice = get_gt_bounding_box(mask_GT)
     print(crop_slice)

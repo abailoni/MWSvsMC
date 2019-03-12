@@ -79,21 +79,17 @@ GAEC:
 #        verbose: True
 #        printNth: 1000000
 
-use_log_costs:
-  parent_model: ['gen_HC']
-  postproc:
-    generalized_HC_kwargs:
-      agglomeration_kwargs:
-        extra_aggl_kwargs:
-          use_log_costs: True
 
-dont_use_log_costs:
+GAEC_noLogCosts:
   parent_model: ['gen_HC']
   postproc:
     generalized_HC_kwargs:
       agglomeration_kwargs:
         extra_aggl_kwargs:
+          update_rule: 'sum'
+          add_cannot_link_constraints: False
           use_log_costs: False
+
 
 MEAN_constr:
   parent_model: ['gen_HC']
@@ -114,6 +110,26 @@ MEAN:
           add_cannot_link_constraints: False
 #          remove_small_segments: True
 #          small_segments_thresh: 200
+
+MEAN_constr_logCosts:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'mean'
+          add_cannot_link_constraints: True
+          use_log_costs: True
+
+MEAN_logCosts:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'mean'
+          add_cannot_link_constraints: False
+          use_log_costs: True
 
 #remove_small:
 #  parent_model: ['gen_HC']
@@ -192,7 +208,15 @@ greedyFixation:
 #        verbose: True
 #        printNth: 1000000
 
-
+greedyFixation_noLogCosts:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          update_rule: 'sum'
+          add_cannot_link_constraints: True
+          use_log_costs: False
 
 #gen_HC_sum:
 #  parent_model: ['gen_HC']
