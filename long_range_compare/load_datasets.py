@@ -157,7 +157,7 @@ CREMI_sub_crops_slices = [":,2:, 100:600, 100:600",
 crops_padded_volumes = {
 "A+": (slice(36, 163, None), slice(1154, 2753, None), slice(934, 2426, None)),
 "B+": (slice(36, 163, None), slice(1055, 2802, None), slice(1254, 4105, None)),
-"C+": (slice(36, 163, None), slice(980, 2443, None), slice(1138, 2569, None))
+"C+": (slice(36, 163, None), slice(979, 2450, None), slice(1138, 2659, None))
 }
 
 

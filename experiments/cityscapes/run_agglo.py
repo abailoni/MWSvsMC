@@ -102,7 +102,7 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
     # Load data:
     with h5py.File(image_path, 'r') as f:
         # TODO: 2
-        # affinities = f['instance_affinities'][:]
+        # affinities_orig = f['instance_affinities'][:]
         # affinities = f['finetuned_affs_noAvg'][:]
         affinities = f['finetuned_affs'][:]
 
@@ -123,7 +123,7 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
     # # -----------------------------------
     #
     # TODO: 3
-    # affinities, foreground_mask_affs = GMIS_utils.combine_affs_and_mask(affinities, class_prob, class_mask, offsets)
+    # affinities_orig, foreground_mask_affs = GMIS_utils.combine_affs_and_mask(affinities_orig, class_prob, class_mask, offsets)
 
 
     config_path = os.path.join(get_hci_home_path(), "pyCharm_projects/longRangeAgglo/experiments/cityscapes/configs")
@@ -248,7 +248,7 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
     # pdf_path = "./segm.pdf"
     # vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
     #
-    # for off_stride in [0,8,16,]:
+    # for off_stride in [0,8,16,24,32,40]:
     #     # affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
     #     # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
     #     # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
@@ -257,7 +257,7 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
     #     # affs_repr /= affs_repr.max()
     #
     #
-    #     fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    #     fig, ax = plt.subplots(ncols=1, nrows=2, figsize=(7, 7))
     #     for a in fig.get_axes():
     #         a.axis('off')
     #
@@ -265,18 +265,19 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
     #     # affs_repr = np.linalg.norm(affs_repr, axis=-1)
     #     # ax.imshow(affs_repr, interpolation="none")
     #
-    #     vis.plot_output_affin(ax, affinities, nb_offset=off_stride+3, z_slice=0)
+    #     vis.plot_output_affin(ax[0], affinities, nb_offset=off_stride+3, z_slice=0)
+    #     vis.plot_output_affin(ax[1], affinities_orig, nb_offset=off_stride + 3, z_slice=0)
     #
     #     pdf_path = image_path.replace(
     #         '.input.h5', '.affs_{}.pdf'.format(off_stride))
     #     # fig.savefig(pdf_path)
-    #     pdf_path = "./balanced_affs_{}.pdf".format(off_stride)
+    #     pdf_path = "./compare_affs_{}_noAvg.pdf".format(off_stride)
     #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
     #     print(off_stride)
     #
     #
-    #
-
+    # print("Waiting...")
+    # time.sleep(1000)
 
     pbar.update(1)
 
@@ -347,10 +348,32 @@ if __name__ == '__main__':
                     # ["MEAN_constr", "thresh035", True],
                     # ["GAEC", "thresh035", False],
                     # ["GAEC", "thresh035", True],
-                    ["MEAN_constr", "thresh030", False],
-                    ["MEAN_constr", "thresh025", False],
-                    ["MEAN_constr", "thresh020", False],
-                    ["MEAN_constr", "thresh040", False],
+                    # ["MutexWatershed", "thresh045", False],
+                    # ["MutexWatershed", "thresh050", False],
+                    # ["MutexWatershed", "thresh040", False],
+                    ["SingleLinkage", "thresh065", False],
+                    ["SingleLinkage", "thresh070", False],
+                    ["SingleLinkage", "thresh075", False],
+                    ["SingleLinkage", "thresh080", False],
+                    ["SingleLinkage", "thresh085", False],
+                    ["SingleLinkagePlusCLC", "thresh060", False],
+                    ["SingleLinkagePlusCLC", "thresh055", False],
+                    ["SingleLinkagePlusCLC", "thresh065", False],
+                    ["SingleLinkagePlusCLC", "thresh070", False],
+                    ["SingleLinkagePlusCLC", "thresh075", False],
+                    ["greedyFixation", "thresh065", False],
+                    ["greedyFixation", "thresh060", False],
+                    ["greedyFixation", "thresh070", False],
+                    ["greedyFixation", "thresh075", False],
+                    ["GAEC", "thresh060", False],
+                    ["GAEC", "thresh065", False],
+                    ["GAEC", "thresh070", False],
+                    ["GAEC", "thresh075", False],
+                    # ["greedyFixation_noLogCosts", "thresh035", False],
+                    # ["MEAN_constr", "thresh030", False],
+                    # ["MEAN_constr", "thresh025", False],
+                    # ["MEAN_constr", "thresh020", False],
+                    # ["MEAN_constr", "thresh040", False],
                 ]:
                     # for agglo in ['MEAN']:
                     # for agglo in ['MAX']:
@@ -361,7 +384,8 @@ if __name__ == '__main__':
                     #         continue
                     #     # for edge_prob in np.concatenate((np.linspace(0.0, 0.1, 17), np.linspace(0.11, 0.8, 18))):
                     #     for edge_prob in ['thresh040', 'thresh045', 'thresh035']:
-                    edge_prob = [edge_prob, "use_log_costs"] if use_log_costs else [edge_prob, "dont_use_log_costs"]
+                    # edge_prob = [edge_prob, "use_log_costs"] if use_log_costs else [edge_prob, "dont_use_log_costs"]
+                    edge_prob = [edge_prob]
 
                     all_paths_to_process.append(path)
                     all_local_attr.append(local_attr)
@@ -373,7 +397,7 @@ if __name__ == '__main__':
                         print("UCM scheduled!")
                         check = True
                     all_UCM.append(saveUCM)
-
+    # FIXME: affs, pool, class, sleep, check file, noAvg
 
     print("Agglomarations to run: ", len(all_paths_to_process))
 

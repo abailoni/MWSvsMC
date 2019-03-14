@@ -11,13 +11,14 @@ def get_hci_home_path():
     elif hostname == 'ialgpu01' or hostname == 'birdperson' or hostname == 'sirherny':
         return '/home/abailoni/hci_home/'
     elif hostname == 'quadxeon5':
-        return '/export/home/abailoni/'
+        return '/srv/scratch/abailoni'
     else:
         return '/net/hciserver03/storage/abailoni/'
 
 def get_trendytukan_drive_path():
     username = getpass.getuser()
     hostname = socket.gethostname()
+    # print(username, hostname)
     if hostname == 'trendytukan' and username == 'abailoni':
         return '/mnt/localdata0/abailoni/'
     elif hostname == 'trendytukan' and username == 'abailoni_local':

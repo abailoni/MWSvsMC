@@ -47,7 +47,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
             model_keys += ["gen_HC_DTWS"] #DTWS
     if additional_model_keys is not None:
         model_keys += additional_model_keys
-    configs = adapt_configs_to_model(model_keys, debug=False, **configs)
+    configs = adapt_configs_to_model(model_keys, debug=True, **configs)
     post_proc_config = configs['postproc']
     post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_probabilities'] = edge_prob
     if use_multicut:
@@ -464,7 +464,7 @@ def add_opensimplex_noise_to_affs(affinities, scale_factor,
     affinities = affinities.copy()
 
     temp_file = os.path.join(get_hci_home_path(), 'affs_plus_opensimplex_noise.h5')
-    vigra.writeHDF5(affinities.astype('float32'), temp_file, 'affs')
+    # vigra.writeHDF5(affinities.astype('float32'), temp_file, 'affs')
 
     # import matplotlib.pyplot as plt
     # from segmfriends import vis as vis
@@ -529,7 +529,7 @@ def add_opensimplex_noise_to_affs(affinities, scale_factor,
     # # # vis.plot_output_affin(ax, affinities, nb_offset=16, z_slice=0)
     # fig.savefig(os.path.join(get_hci_home_path(), "perlin_noise.pdf"))
 
-    vigra.writeHDF5(affinities.astype('float32'), temp_file, 'affs_noisy')
+    # vigra.writeHDF5(affinities.astype('float32'), temp_file, 'affs_noisy')
 
     return affinities
 
@@ -554,7 +554,7 @@ def get_block_data_lists():
 
 def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
                     crop_iter, subcrop_iter,
-                    init_kwargs_iter=None, nb_iterations=1):
+                    init_kwargs_iter=None, nb_iterations=1, noise_mod='split-biased'):
     kwargs_iter = init_kwargs_iter if isinstance(init_kwargs_iter, list) else []
 
     iter_collected = {
@@ -615,7 +615,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
                             #                 '{:.4f}'.format(noise))
                             if noise != 0.:
                                 affinities_blocks[sample][crop][sub_crop][noise] = add_opensimplex_noise_to_affs(affinities, noise,
-                                                              mod='split-biased',
+                                                              mod=noise_mod,
                                                               target_affs='all',
                                                               seed=noise_seed
                                                               )

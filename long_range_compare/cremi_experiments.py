@@ -26,14 +26,14 @@ class CremiExperiment(object):
         self.kwargs_to_be_iterated = {}
 
     def get_cremi_kwargs_iter(self, crop_iter, subcrop_iter,
-                              init_kwargs_iter=None, nb_iterations=1):
+                              init_kwargs_iter=None, nb_iterations=1, noise_mod='split-biased'):
         """
         CROPS:    Deep-z: 5     MC: 4   All: 0:4
         SUBCROPS: Deep-z: 5     MC: 6  All: 4 Tiny: 5
         """
         return cremi_utils.get_kwargs_iter(self.fixed_kwargs, self.kwargs_to_be_iterated,
                                            crop_iter=crop_iter, subcrop_iter=subcrop_iter,
-                                           init_kwargs_iter=init_kwargs_iter, nb_iterations=nb_iterations)
+                                           init_kwargs_iter=init_kwargs_iter, nb_iterations=nb_iterations, noise_mod=noise_mod)
 
     def get_list_of_runs(self, path):
         IDs, configs, json_files = [], [], []
@@ -177,7 +177,7 @@ class FullTestSamples(CremiExperiment):
             # 'agglo': ["MEAN_constr", "GAEC", "greedyFixation"],
             'agglo': ["MEAN"],
             # 'sample': ["B+"]
-            'sample': ["A+", "C+", "B+"]
+            'sample': ["B+"]
         })
 
     def get_data(self, kwargs_iter=None):
@@ -207,7 +207,7 @@ class FullTestSamples(CremiExperiment):
         from cremi import Annotations, Volume
         from cremi.io import CremiFile
 
-        for sample in ["A+", "B+", "C+"]:
+        for sample in ["B+"]:
             results_collected_crop = results_collected[sample][CREMI_crop_slices[sample][0]][CREMI_sub_crops_slices[6]]
 
             for agglo_type in [ty for ty in ['mean'] if ty in results_collected_crop]:
@@ -221,46 +221,46 @@ class FullTestSamples(CremiExperiment):
                         if 0.1 not in sub_dict:
                             continue
 
-                        IDs = list(sub_dict[0.1].keys())
-                        assert len(IDs) == 1
-                        ID = IDs[0]
+                        for ID in sub_dict[0.1]:
+                            config_dict = sub_dict[0.1][ID]
+                            sample = config_dict["sample"]
 
-                        config_dict = sub_dict[0.1][ID]
-                        sample = config_dict["sample"]
 
-                        print("aligning sample ", sample)
 
-                        # Load segm from file:
-                        filename = "{}_{}_{}_{}.h5".format(ID, sample, config_dict["agglo_type"], config_dict["non_link"])
-                        segm_path = os.path.join(project_directory, exp_name, "out_segms", filename)
-                        segm = vigra.readHDF5(segm_path, "segm_WS")
+                            # Load segm from file:
+                            filename = "{}_{}_{}_{}.h5".format(ID, sample, config_dict["agglo_type"], config_dict["non_link"])
+                            segm_path = os.path.join(project_directory, exp_name, "out_segms", filename)
+                            if not os.path.exists(segm_path):
+                                continue
+                            print("aligning sample ", filename)
+                            segm = vigra.readHDF5(segm_path, "segm_WS")
 
-                        # Add padding to bring it back in the shape of the padded-aligned volumes:
-                        crop = load_datasets.crops_padded_volumes[sample]
-                        orig_shape = load_datasets.shape_padded_aligned_datasets[sample]
-                        padding = tuple( (slc.start, shp - slc.stop) for slc, shp in zip(crop, orig_shape) )
-                        padded_segm = np.pad(segm, pad_width=padding, mode="constant")
+                            # Add padding to bring it back in the shape of the padded-aligned volumes:
+                            crop = load_datasets.crops_padded_volumes[sample]
+                            orig_shape = load_datasets.shape_padded_aligned_datasets[sample]
+                            padding = tuple( (slc.start, shp - slc.stop) for slc, shp in zip(crop, orig_shape) )
+                            padded_segm = np.pad(segm, pad_width=padding, mode="constant")
 
-                        # Apply Constantin crop and then backalign:
-                        cropped_segm = padded_segm[bounding_boxes[sample]]
-                        tmp_file = segm_path.replace(".h5", "_submission_temp.hdf")
-                        backalign_segmentation(sample, cropped_segm, tmp_file,
-                                               key="temp_data",
-                                               postprocess=False)
+                            # Apply Constantin crop and then backalign:
+                            cropped_segm = padded_segm[bounding_boxes[sample]]
+                            tmp_file = segm_path.replace(".h5", "_submission_temp.hdf")
+                            backalign_segmentation(sample, cropped_segm, tmp_file,
+                                                   key="temp_data",
+                                                   postprocess=False)
 
-                        # Create a CREMI-style file ready to submit:
-                        final_submission_path = segm_path.replace(".h5", "_submission.hdf")
-                        file = CremiFile(final_submission_path, "w")
+                            # Create a CREMI-style file ready to submit:
+                            final_submission_path = segm_path.replace(".h5", "_submission.hdf")
+                            file = CremiFile(final_submission_path, "w")
 
-                        # Write volumes representing the neuron and synaptic cleft segmentation.
-                        backaligned_segm = vigra.readHDF5(tmp_file, "temp_data")
-                        neuron_ids = Volume(backaligned_segm.astype('uint64'), resolution=(40.0, 4.0, 4.0),
-                                            comment="SP-CNN-submission")
+                            # Write volumes representing the neuron and synaptic cleft segmentation.
+                            backaligned_segm = vigra.readHDF5(tmp_file, "temp_data")
+                            neuron_ids = Volume(backaligned_segm.astype('uint64'), resolution=(40.0, 4.0, 4.0),
+                                                comment="SP-CNN-submission")
 
-                        file.write_neuron_ids(neuron_ids)
-                        file.close()
+                            file.write_neuron_ids(neuron_ids)
+                            file.close()
 
-                        os.remove(tmp_file)
+                            os.remove(tmp_file)
 
 
 
@@ -313,9 +313,9 @@ class CropTrainSamples(CremiExperiment):
             "dataset": "CREMI",
             "from_superpixels": False,
             "use_multicut": False,
-            "save_segm": False,
+            "save_segm": True,
             "WS_growing": True,
-            "edge_prob": 0.23,
+            "edge_prob": 0.201,
             # "sample": "B",
             "experiment_name": "cropTrainSamples",
             "local_attraction": False,
@@ -327,10 +327,10 @@ class CropTrainSamples(CremiExperiment):
 
 
         self.kwargs_to_be_iterated.update({
-            'agglo': ["SingleLinkage", "SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC",
-                      "MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation", "GAEC_noLogCosts", "MEAN_constr_logCosts",
-                      "MEAN_logCosts", "greedyFixation_noLogCosts"],
-            # 'agglo': ["SingleLinkage"],
+            'agglo': [
+                      "MEAN",  "greedyFixation_noLogCosts", "MEAN_constr", "GAEC", "greedyFixation", "GAEC_noLogCosts", "SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "MEAN_constr_logCosts",
+                      "MEAN_logCosts", "SingleLinkage", "MutexWatershed"],
+            # 'agglo': ["GAEC"],
             # 'agglo': ["MutexWatershed"],
             # 'agglo': ["MEAN_constr", "GAEC", "greedyFixation"],
             'sample': ["C"],
@@ -340,7 +340,7 @@ class CropTrainSamples(CremiExperiment):
     #     TODO: crops! agglo, from_superpixels, edge_prob, check and merge_edge, WS_grow
 
     def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 4
+        nb_threads_pool = 5
         nb_iterations = 1
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(4, 5), #4
@@ -349,6 +349,45 @@ class CropTrainSamples(CremiExperiment):
         return kwargs_iter, nb_threads_pool
 
 
+    def collect_scores(self, project_directory):
+        exp_name = self.fixed_kwargs['experiment_name']
+        scores_path = os.path.join(project_directory, exp_name, "scores")
+        config_list, json_file_list = self.get_list_of_runs(scores_path)
+
+        def assign_color(value, good_thresh, bad_thresh, nb_flt):
+            if value < good_thresh:
+                return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            if value > good_thresh and value < bad_thresh:
+                return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            if value > bad_thresh:
+                return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+
+        collected_results = []
+        energies = []
+        for config, json_file in zip(config_list, json_file_list):
+            if config["edge_prob"] != 0.232:
+                continue
+            print(config["sample"])
+            CLC = config["non_link"]
+            agglo_type = config["agglo_type"]
+            new_table_entrance = [agglo_type, str(CLC)]
+            if 'use_log_costs' in config['postproc_config']['generalized_HC_kwargs']['agglomeration_kwargs']['extra_aggl_kwargs']:
+                new_table_entrance.append(str(config['postproc_config']['generalized_HC_kwargs']['agglomeration_kwargs']['extra_aggl_kwargs']['use_log_costs']))
+            else:
+                new_table_entrance.append("")
+            energies.append(config['energy'])
+            new_table_entrance.append('{:.0f}'.format(config['energy']))
+            # new_table_entrance.append('{:.0f}'.format(config['runtime']))
+            new_table_entrance.append(assign_color(config['runtime'], 1000, 5000, 0))
+            new_table_entrance.append(assign_color(config['score_WS']['adapted-rand'], 0.1, 0.2, 4))
+            new_table_entrance.append(assign_color(config['score_WS']['vi-merge'], 0.3, 0.45, 3))
+            new_table_entrance.append(assign_color(config['score_WS']['vi-split'], 0.450, 0.6, 3))
+            # new_table_entrance.append('{:.3f}'.format(config['score_WS']['vi-split']))
+            collected_results.append(new_table_entrance)
+        collected_results = np.array(collected_results)
+        collected_results = collected_results[np.array(energies).argsort()]
+        np.savetxt(os.path.join(scores_path, "collected.csv"), collected_results, delimiter=' & ', fmt='%s',
+                   newline=' \\\\\n')
 
 class NoiseExperiment(CremiExperiment):
     def __init__(self, *super_args, **super_kwargs):
@@ -356,11 +395,11 @@ class NoiseExperiment(CremiExperiment):
 
         self.fixed_kwargs.update({
             "dataset": "CREMI",
-            "from_superpixels": True,
+            "from_superpixels": False,
             "use_multicut": False,
             "save_segm": False,
             "WS_growing": True,
-            "edge_prob": 0.1,
+            "edge_prob": 0.,
             "sample": "B",
             "experiment_name": "simplexNoiseMergeBiasedAllEdges",
             "local_attraction": False,
@@ -373,18 +412,19 @@ class NoiseExperiment(CremiExperiment):
         self.kwargs_to_be_iterated.update({
             'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
             # 'agglo': ["MEAN"],
-            # "noise_factor": np.concatenate((np.linspace(2., 4.5, 5), np.linspace(4.5, 10., 15)))
-            "noise_factor": [4.0]
+            "noise_factor": np.concatenate((np.linspace(2., 4.5, 5), np.linspace(4.5, 10., 15)))
+            # "noise_factor": [4.0]
             # 'sample': ["B"]
             # 'sample': ["B+", "A+", "C+"]
         })
 
     def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 15
-        nb_iterations = 1
+        nb_threads_pool = 25
+        nb_iterations = 6
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(5, 6), subcrop_iter=range(5, 6),
-                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations,
+                                                 noise_mod='merge-biased')
 
         return kwargs_iter, nb_threads_pool
 
@@ -402,10 +442,10 @@ class NoiseExperiment(CremiExperiment):
                   }
 
         # key_y = ['score_WS', 'vi-merge']
-        # key_y = ['score_WS', 'adapted-rand']
+        key_y = ['score_WS', 'adapted-rand']
         key_x = ['noise_factor']
         # key_y = ['score_WS', 'vi-split']
-        key_y = ['energy']
+        # key_y = ['energy']
         # key_x = ['runtime']
         key_value = ['runtime']
 
@@ -562,7 +602,7 @@ class NoiseExperiment(CremiExperiment):
                                     # ax.plot(np.linspace(0.0, 0.9, 15), [VI_split[0] for _ in range(15)], '.-',
                                     #         color=colors[agglo_type][non_link][local_attraction], alpha=0.8,label = plot_label_1 + plot_label_2 + plot_label_3)
 
-                        # vis_utils.set_log_tics(ax, [-2, 0], [10], format="%.2f", axis='y')
+                        vis_utils.set_log_tics(ax, [-2, 0], [10], format="%.2f", axis='y')
 
                         # ax.set_ylim([0.028, 0.078])
                         # ax.set_ylim([0.03, 0.60])
@@ -604,13 +644,13 @@ class NoiseExperimentSplit(CremiExperiment):
 
         self.fixed_kwargs.update({
             "dataset": "CREMI",
-            "from_superpixels": True,
+            "from_superpixels": False,
             "use_multicut": False,
-            "save_segm": True,
+            "save_segm": False,
             "WS_growing": True,
             "edge_prob": 0.,
             "sample": "B",
-            "experiment_name": "simplexNoiseSplitBiasedAllEdges",
+            "experiment_name": "simplexNoiseSplitBiasedAllEdgesFromPix",
             "local_attraction": False,
             "additional_model_keys": ["noise_sups"],
             "compute_scores": True,
@@ -619,20 +659,21 @@ class NoiseExperimentSplit(CremiExperiment):
         })
         # TODO: agglos, noise factor! Save segm, save noisy affs
         self.kwargs_to_be_iterated.update({
-            # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
-            'agglo': ["MEAN"],
-            # "noise_factor": np.concatenate((np.linspace(2., 4.5, 5), np.linspace(4.5, 10., 15)))
-            "noise_factor": [8.0]
+            'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
+            # 'agglo': ["MEAN"],
+            "noise_factor": np.concatenate((np.linspace(2., 4.5, 5), np.linspace(4.5, 10., 15)))
+            # "noise_factor": [8.0]
             # 'sample': ["B"]
             # 'sample': ["B+", "A+", "C+"]
         })
 
     def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 7
-        nb_iterations = 2
+        nb_threads_pool = 16
+        nb_iterations = 10
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(5, 6), subcrop_iter=range(5, 6),
-                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations,
+                                                 noise_mod='split-biased')
 
         return kwargs_iter, nb_threads_pool
 
