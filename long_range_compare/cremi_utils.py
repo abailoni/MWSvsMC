@@ -35,6 +35,10 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
 
     affinities = affinities.copy()
 
+    # # FIXME: delete noise
+    # affinities += np.random.normal(scale=1e-2,size=affinities.shape)
+    # affinities = np.clip(affinities, 0., 1.)
+
     offsets = get_dataset_offsets(dataset)
 
     configs = {'models': yaml2dict(os.path.join(configs_dir_path, 'models_config.yml')),
@@ -257,9 +261,9 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
         # vigra.writeHDF5(UCM, UCM_h5_file, 'UCM')
         vigra.writeHDF5(mergeTimes[:3].astype('int64'), UCM_h5_file, 'merge_times')
 
-        save_UCM_video('{}_{}_{}_{}'.format(ID, sample, agglo_type, non_link), UCM_folder,
-                       selected_offset=1, selected_slice=0, nb_frames=100,
-                       postfix="allow_merge", final_segm=pred_segm_WS)
+        # save_UCM_video('{}_{}_{}_{}'.format(ID, sample, agglo_type, non_link), UCM_folder,
+        #                selected_offset=1, selected_slice=0, nb_frames=100,
+        #                postfix="allow_merge", final_segm=pred_segm_WS)
 
 
 

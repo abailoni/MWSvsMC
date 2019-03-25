@@ -850,6 +850,17 @@ thresh099:
         extra_aggl_kwargs:
           threshold: 0.99
 
+thresh000:
+  postproc:
+    MWS_kwargs:
+      bias: 0.00000000000001
+    multicut_kwargs:
+      beta: 0.00000000000001
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          threshold: 0.00000000000001
+
 thresh097:
   postproc:
     MWS_kwargs:
