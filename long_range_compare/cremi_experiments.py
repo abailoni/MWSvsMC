@@ -125,7 +125,7 @@ class DebugExp(CremiExperiment):
 
         self.fixed_kwargs.update({
             "dataset": "CREMI",
-            "from_superpixels": False,
+            "from_superpixels": True,
             "use_multicut": False,
             "save_segm": True,
             "WS_growing": True,
@@ -340,7 +340,7 @@ class CropTrainSamples(CremiExperiment):
     #     TODO: crops! agglo, from_superpixels, edge_prob, check and merge_edge, WS_grow
 
     def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 5
+        nb_threads_pool = 1
         nb_iterations = 1
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(4, 5), #4
