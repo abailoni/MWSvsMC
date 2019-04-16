@@ -74,7 +74,6 @@ GAEC:
         extra_aggl_kwargs:
           update_rule: 'sum'
           add_cannot_link_constraints: False
-          use_log_costs: True
 #      extra_runAggl_kwargs:
 #        verbose: True
 #        printNth: 1000000
@@ -88,7 +87,6 @@ GAEC_noLogCosts:
         extra_aggl_kwargs:
           update_rule: 'sum'
           add_cannot_link_constraints: False
-          use_log_costs: False
 
 
 MEAN_constr:
@@ -99,7 +97,6 @@ MEAN_constr:
         extra_aggl_kwargs:
           update_rule: 'mean'
           add_cannot_link_constraints: True
-          use_log_costs: False
 
 MEAN:
   parent_model: ['gen_HC']
@@ -109,9 +106,6 @@ MEAN:
         extra_aggl_kwargs:
           update_rule: 'mean'
           add_cannot_link_constraints: False
-          use_log_costs: False
-#          remove_small_segments: True
-#          small_segments_thresh: 200
 
 MEAN_constr_logCosts:
   parent_model: ['gen_HC']
@@ -121,7 +115,6 @@ MEAN_constr_logCosts:
         extra_aggl_kwargs:
           update_rule: 'mean'
           add_cannot_link_constraints: True
-          use_log_costs: True
 
 MEAN_logCosts:
   parent_model: ['gen_HC']
@@ -131,7 +124,6 @@ MEAN_logCosts:
         extra_aggl_kwargs:
           update_rule: 'mean'
           add_cannot_link_constraints: False
-          use_log_costs: True
 
 #remove_small:
 #  parent_model: ['gen_HC']
@@ -150,9 +142,6 @@ MutexWatershed:
         extra_aggl_kwargs:
           update_rule: 'MutexWatershed'
           add_cannot_link_constraints: False
-          use_log_costs: False
-#          remove_small_segments: True
-#          small_segments_thresh: 200
 
 CompleteLinkage:
   parent_model: ['gen_HC']
@@ -162,7 +151,7 @@ CompleteLinkage:
         extra_aggl_kwargs:
           update_rule: 'min'
           add_cannot_link_constraints: False
-          use_log_costs: False
+#          use_log_costs: False
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
@@ -174,7 +163,7 @@ CompleteLinkagePlusCLC:
         extra_aggl_kwargs:
           update_rule: 'min'
           add_cannot_link_constraints: True
-          use_log_costs: False
+#          use_log_costs: False
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
@@ -186,7 +175,7 @@ SingleLinkage:
         extra_aggl_kwargs:
           update_rule: 'max'
           add_cannot_link_constraints: False
-          use_log_costs: False
+#          use_log_costs: False
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
@@ -198,7 +187,7 @@ SingleLinkagePlusCLC:
         extra_aggl_kwargs:
           update_rule: 'max'
           add_cannot_link_constraints: True
-          use_log_costs: False
+#          use_log_costs: False
 #          remove_small_segments: True
 #          small_segments_thresh: 200
 
@@ -210,7 +199,7 @@ greedyFixation:
         extra_aggl_kwargs:
           update_rule: 'sum'
           add_cannot_link_constraints: True
-          use_log_costs: True
+#          use_log_costs: True
 #      extra_runAggl_kwargs:
 #        verbose: True
 #        printNth: 1000000
@@ -223,7 +212,7 @@ greedyFixation_noLogCosts:
         extra_aggl_kwargs:
           update_rule: 'sum'
           add_cannot_link_constraints: True
-          use_log_costs: False
+#          use_log_costs: False
 
 #gen_HC_sum:
 #  parent_model: ['gen_HC']
