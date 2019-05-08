@@ -93,17 +93,19 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
         if inner_path not in f:
             already_exists = False
 
-    if already_exists:
-        pbar.update(1)
-        return
+    # TODO: already exist, writing, load affs
+
+    # if already_exists:
+    #     pbar.update(1)
+    #     return
     # print(image_path)
 
     # print("Processing {}...".format(image_path))
     # Load data:
     with h5py.File(image_path, 'r') as f:
         # TODO: 2
-        # affinities_orig = f['instance_affinities'][:]
-        # affinities = f['finetuned_affs_noAvg'][:]
+        affinities_orig = f['instance_affinities'][:]
+        affinities_noAvg = f['finetuned_affs_noAvg'][:]
         affinities = f['finetuned_affs'][:]
 
 
@@ -221,63 +223,68 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
 
     # TODO: allow all kinds of merges (not onyl local); skip connected components on the seeds
     # pred_segm_WS *= foreground_mask
-    confidence_scores = GMIS_utils.get_confidence_scores(pred_segm_WS, affinities, offsets)
+    # confidence_scores = GMIS_utils.get_confidence_scores(pred_segm_WS, affinities, offsets)
 
 
     # inner_path = "MEAN_bk_fixed"
-    vigra.writeHDF5(pred_segm_WS[0].astype('uint16'), inst_out_file, inner_path)
-    vigra.writeHDF5(confidence_scores, inst_out_conf_file, inner_path)
-    vigra.writeHDF5(np.array([MC_energy['MC_energy']]), inst_out_conf_file, "MC_energy/" + inner_path)
+    # vigra.writeHDF5(pred_segm_WS[0].astype('uint16'), inst_out_file, inner_path)
+    # vigra.writeHDF5(confidence_scores, inst_out_conf_file, inner_path)
+    # vigra.writeHDF5(np.array([MC_energy['MC_energy']]), inst_out_conf_file, "MC_energy/" + inner_path)
 
 
-    # # # # -------------------------------------------------
-    # # # # PLOTTING:
-    # # #
-    # from segmfriends import vis as vis
-    #
-    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+    # # # -------------------------------------------------
+    # # # PLOTTING:
+    # #
+    from segmfriends import vis as vis
+
+    # fig, axes = plt.subplots(ncols=1, nrows=3, figsize=(7, 7))
     # for a in fig.get_axes():
     #     a.axis('off')
     #
     # # affs_repr = np.linalg.norm(affs_repr, axis=-1)
     # # ax.imshow(affs_repr, interpolation="none")
     #
+    #
+    #
     # vis.plot_segm(ax, pred_segm_WS, z_slice=0)
     #
     # # fig.savefig(pdf_path)
     # pdf_path = "./segm.pdf"
     # vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-    #
-    # for off_stride in [0,8,16,24,32,40]:
-    #     # affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
-    #     # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
-    #     # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
-    #     # if affs_repr.min() < 0:
-    #     #     affs_repr += np.abs(affs_repr.min())
-    #     # affs_repr /= affs_repr.max()
-    #
-    #
-    #     fig, ax = plt.subplots(ncols=1, nrows=2, figsize=(7, 7))
-    #     for a in fig.get_axes():
-    #         a.axis('off')
-    #
-    #
-    #     # affs_repr = np.linalg.norm(affs_repr, axis=-1)
-    #     # ax.imshow(affs_repr, interpolation="none")
-    #
-    #     vis.plot_output_affin(ax[0], affinities, nb_offset=off_stride+3, z_slice=0)
-    #     vis.plot_output_affin(ax[1], affinities_orig, nb_offset=off_stride + 3, z_slice=0)
-    #
-    #     pdf_path = image_path.replace(
-    #         '.input.h5', '.affs_{}.pdf'.format(off_stride))
-    #     # fig.savefig(pdf_path)
-    #     pdf_path = "./compare_affs_{}_noAvg.pdf".format(off_stride)
-    #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-    #     print(off_stride)
-    #
-    #
-    # print("Waiting...")
-    # time.sleep(1000)
+
+
+
+    for off_stride in [0,8,16,24,32,40]:
+        # affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
+        # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
+        # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
+        # if affs_repr.min() < 0:
+        #     affs_repr += np.abs(affs_repr.min())
+        # affs_repr /= affs_repr.max()
+
+
+        fig, ax = plt.subplots(ncols=1, nrows=3, figsize=(7, 7))
+        for a in fig.get_axes():
+            a.axis('off')
+
+
+        # affs_repr = np.linalg.norm(affs_repr, axis=-1)
+        # ax.imshow(affs_repr, interpolation="none")
+
+        vis.plot_output_affin(ax[0], affinities, nb_offset=off_stride+3, z_slice=0)
+        vis.plot_output_affin(ax[1], affinities_orig, nb_offset=off_stride + 3, z_slice=0)
+        vis.plot_output_affin(ax[2], affinities_noAvg, nb_offset=off_stride + 3, z_slice=0)
+
+        pdf_path = image_path.replace(
+            '.input.h5', '.affs_{}.pdf'.format(off_stride))
+        # fig.savefig(pdf_path)
+        pdf_path = "./comparison_affs_{}_noAvg.pdf".format(off_stride)
+        vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+        print(off_stride)
+
+
+    print("Waiting...")
+    time.sleep(1000)
 
     pbar.update(1)
 
@@ -327,6 +334,7 @@ def pool_initializer(l):
 if __name__ == '__main__':
 
     all_images_paths = get_GMIS_dataset(partial=False)
+    # print(all_images_paths)
 
     global trained_log_regr
     trained_log_regr = GMIS_utils.LogRegrModel()
@@ -406,7 +414,7 @@ if __name__ == '__main__':
     from itertools import repeat
     from multiprocessing import Lock
     l = Lock()
-    pool = ThreadPool(initializer=pool_initializer, initargs=(l,),  processes=12)
+    pool = ThreadPool(initializer=pool_initializer, initargs=(l,),  processes=1)
 
     from tqdm import tqdm
     #

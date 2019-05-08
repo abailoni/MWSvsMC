@@ -16,8 +16,9 @@ original_images_dir = os.path.join(get_trendytukan_drive_path(), "datasets/citys
 
 image_name = 'munster/munster_000167_000019_leftImg8bit_combine.inst.jpg'
 image_name = 'frankfurt/frankfurt_000001_020693_leftImg8bit_combine.inst.jpg'
-image_name = "munster/munster_000167_000019_leftImg8bit_combine.inst.jpg"
+# image_name = "munster/munster_000167_000019_leftImg8bit_combine.inst.jpg"
 # image_name = 'frankfurt/frankfurt_000001_015768_leftImg8bit_combine.inst.jpg'
+
 
 ignored = ["COLLECTED", "MAX_bk_mask", "MEAN_bk_mask", "MEAN_constr_bk_mask"]
 
@@ -28,7 +29,7 @@ for subdir, dirs, files in os.walk(result_root_dir):
 
     for agglo_type in dirs:
         # if agglo_type in ignored or ("clean" not in agglo_type and "ORIG" not in agglo_type):
-        if agglo_type in ignored or ("balanced" not in agglo_type and "ORIG" not in agglo_type):
+        if agglo_type in ignored or ("finetuned_affs_avg_thresh0" not in agglo_type and "ORIG" not in agglo_type):
             continue
         main_dir = os.path.join(subdir, agglo_type)
         agglo_image = os.path.join(main_dir, image_name)

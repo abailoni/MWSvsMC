@@ -151,6 +151,38 @@ class DebugExp(CremiExperiment):
 
         return kwargs_iter, nb_threads_pool
 
+class BlockWiseExp(CremiExperiment):
+    def __init__(self, *super_args, **super_kwargs):
+        super(BlockWiseExp, self).__init__(*super_args, **super_kwargs)
+
+        self.fixed_kwargs.update({
+            "dataset": "CREMI",
+            "from_superpixels": False,
+            "use_multicut": False,
+            "save_segm": True,
+            "WS_growing": True,
+            "edge_prob": 0.0,
+            "sample": "B",
+            "experiment_name": "debug_exp",
+            "local_attraction": False,
+            "additional_model_keys": [],
+            "save_UCM": False
+        })
+
+        self.kwargs_to_be_iterated.update({
+            "noise_factor": [0.],
+            'agglo': ["MEAN"]
+        })
+
+    def get_data(self, kwargs_iter=None):
+        nb_threads_pool = 1
+        nb_iterations = 1
+
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(5, 6),
+                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+
+        return kwargs_iter, nb_threads_pool
+
 
 class FullTestSamples(CremiExperiment):
     def __init__(self, *super_args, **super_kwargs):
@@ -354,20 +386,32 @@ class CropTrainSamples(CremiExperiment):
         scores_path = os.path.join(project_directory, exp_name, "scores")
         config_list, json_file_list = self.get_list_of_runs(scores_path)
 
-        def assign_color(value, good_thresh, bad_thresh, nb_flt):
-            if value < good_thresh:
-                return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
-            if value > good_thresh and value < bad_thresh:
-                return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
-            if value > bad_thresh:
-                return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+        def assign_color(value, good_thresh, bad_thresh, nb_flt, best="lowest"):
+            if best == "lowest":
+                if value < good_thresh:
+                    return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value > good_thresh and value < bad_thresh:
+                    return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value > bad_thresh:
+                    return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            elif best == "highest":
+                if value > good_thresh:
+                    return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value < good_thresh and value > bad_thresh:
+                    return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value < bad_thresh:
+                    return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            else:
+                raise ValueError
 
         collected_results = []
-        energies = []
+        energies, ARAND = [], []
+        SEL_PROB = 0.23
         for config, json_file in zip(config_list, json_file_list):
-            if config["edge_prob"] != 0.232:
+            if config["edge_prob"] != SEL_PROB: # 0.232  0.231  0.19  0.23  0.2   0.201   0.0
+                print(config["edge_prob"])
                 continue
-            print(config["sample"])
+            print(config["sample"], json_file)
             CLC = config["non_link"]
             agglo_type = config["agglo_type"]
             new_table_entrance = [agglo_type, str(CLC)]
@@ -376,17 +420,18 @@ class CropTrainSamples(CremiExperiment):
             else:
                 new_table_entrance.append("")
             energies.append(config['energy'])
+            ARAND.append(config['score_WS']['adapted-rand'])
             new_table_entrance.append('{:.0f}'.format(config['energy']))
             # new_table_entrance.append('{:.0f}'.format(config['runtime']))
             new_table_entrance.append(assign_color(config['runtime'], 1000, 5000, 0))
-            new_table_entrance.append(assign_color(config['score_WS']['adapted-rand'], 0.1, 0.2, 4))
+            new_table_entrance.append(assign_color(1.-config['score_WS']['adapted-rand'], 0.9, 0.8, 4, best="highest"))
             new_table_entrance.append(assign_color(config['score_WS']['vi-merge'], 0.3, 0.45, 3))
             new_table_entrance.append(assign_color(config['score_WS']['vi-split'], 0.450, 0.6, 3))
             # new_table_entrance.append('{:.3f}'.format(config['score_WS']['vi-split']))
             collected_results.append(new_table_entrance)
         collected_results = np.array(collected_results)
-        collected_results = collected_results[np.array(energies).argsort()]
-        np.savetxt(os.path.join(scores_path, "collected.csv"), collected_results, delimiter=' & ', fmt='%s',
+        collected_results = collected_results[np.array(ARAND).argsort()]
+        np.savetxt(os.path.join(scores_path, "collected_{}.csv".format(SEL_PROB)), collected_results, delimiter=' & ', fmt='%s',
                    newline=' \\\\\n')
 
 class NoiseExperiment(CremiExperiment):
@@ -461,14 +506,14 @@ class NoiseExperiment(CremiExperiment):
         legend_labels = {
             'vi-merge': "Variation of information - merge",
             'vi-split': "Variation of information - split",
-            'adapted-rand': "Adapted RAND score",
+            'adapted-rand': "Rand-Score",
             'noise_factor': "Noise factor $\mathcal{K}$ - Amount of merge-biased noise added to edge weights",
             'energy': 'Multicut energy'
 
         }
 
         update_rule_names = {
-            'sum': "Sum", 'MutexWatershed': "Absolute Max (MWS)", 'mean': "Mean"
+            'sum': "Sum", 'MutexWatershed': "Absolute Max", 'mean': "Mean"
         }
 
         axis_ranges = {
@@ -496,7 +541,7 @@ class NoiseExperiment(CremiExperiment):
                         results_collected_crop = results_collected[sample][crop][subcrop]
 
                         matplotlib.rcParams.update({'font.size': 10})
-                        f, axes = plt.subplots(ncols=1, nrows=2, figsize=(7, 7))
+                        f, axes = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
 
                         for k, selected_edge_prob in enumerate([0., 0.1]):
                             ax = axes[k]
@@ -598,7 +643,7 @@ class NoiseExperiment(CremiExperiment):
                                         print("Found in {}: {}".format(agglo_type, counter_per_type))
 
 
-                                        label = plot_label_1 + plot_label_2 + plot_label_3 if k == 0 else None
+                                        label = plot_label_1 + plot_label_2 + plot_label_3
 
                                         argsort = np.argsort(VI_merge)
                                         ax.fill_between(VI_merge[argsort], split_q_0_25[argsort],
@@ -631,6 +676,12 @@ class NoiseExperiment(CremiExperiment):
                                         # ax.plot(np.linspace(0.0, 0.9, 15), [VI_split[0] for _ in range(15)], '.-',
                                         #         color=colors[agglo_type][non_link][local_attraction], alpha=0.8,label = plot_label_1 + plot_label_2 + plot_label_3)
 
+                                        title = "Without long-range connections" if k == 0 else "With 10% long-range connections"
+                                        # ax.set_title(title)
+                                        props = dict(boxstyle='round', facecolor='white', alpha=0.5)
+                                        ax.text(0.6, 0.1, title, transform=ax.transAxes, fontsize=10, fontweight='bold',
+                                                verticalalignment='top', bbox=props)
+
                             # vis_utils.set_log_tics(ax, [-2, 0], [10], format="%.2f", axis='y')
 
                             ax.set_ylim([0.55, 0.98])
@@ -645,7 +696,16 @@ class NoiseExperiment(CremiExperiment):
                             # ax.set_xscale("log")
 
                             # ax.set_xticks(np.arange(0, 1, step=0.1))
-                            ax.legend(loc="lower left")
+
+                            # Reorder legend:
+                            handles, labels = ax.get_legend_handles_labels()
+                            # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
+                            new_ordering = [4,1,3,2,0] if k == 0 else [3,4,1,0,2]
+
+                            handles = [handles[new_indx] for new_indx in new_ordering]
+                            labels = [labels[new_indx] for new_indx in new_ordering]
+
+                            ax.legend(handles, labels) #loc="lower left"
                             if k == 1:
                                 ax.set_xlabel(legend_labels[key_x[-1]])
                             ax.set_ylabel(legend_labels[key_y[-1]])
@@ -656,6 +716,8 @@ class NoiseExperiment(CremiExperiment):
                                 ax.set_ylim(axis_ranges[key_y[-1]])
 
                             # ax.set_xlim([0.15, 0.35])
+
+                        plt.subplots_adjust(hspace=0.2)
 
                         plot_dir = os.path.join(project_directory, exp_name, "plots")
                         check_dir_and_create(plot_dir)
@@ -751,14 +813,14 @@ class NoiseExperimentSplit(CremiExperiment):
         legend_labels = {
             'vi-merge': "Variation of information - merge",
             'vi-split': "Variation of information - split",
-            'adapted-rand': "Adapted RAND score",
+            'adapted-rand': "Rand-Score",
             'noise_factor': "Noise factor $\mathcal{K}$ - Amount of split-biased noise added to edge weights",
             'energy': 'Multicut energy'
 
         }
 
         update_rule_names = {
-            'sum': "Sum", 'MutexWatershed': "Absolute Max (MWS)", 'mean': "Mean"
+            'sum': "Sum", 'MutexWatershed': "Absolute Max", 'mean': "Mean"
         }
 
         axis_ranges = {
@@ -786,7 +848,7 @@ class NoiseExperimentSplit(CremiExperiment):
                         results_collected_crop = results_collected[sample][crop][subcrop]
 
                         matplotlib.rcParams.update({'font.size': 10})
-                        f, axes = plt.subplots(ncols=1, nrows=2, figsize=(7, 7))
+                        f, axes = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
 
                         for k, selected_edge_prob in enumerate([0., 0.1]):
                             ax = axes[k]
@@ -888,7 +950,7 @@ class NoiseExperimentSplit(CremiExperiment):
                                         print("Found in {}: {}".format(agglo_type, counter_per_type))
 
 
-                                        label = plot_label_1 + plot_label_2 + plot_label_3 if k == 0 else None
+                                        label = plot_label_1 + plot_label_2 + plot_label_3
 
                                         argsort = np.argsort(VI_merge)
                                         ax.fill_between(VI_merge[argsort], split_q_0_25[argsort],
@@ -924,6 +986,12 @@ class NoiseExperimentSplit(CremiExperiment):
                                         # ax.plot(np.linspace(0.0, 0.9, 15), [VI_split[0] for _ in range(15)], '.-',
                                         #         color=colors[agglo_type][non_link][local_attraction], alpha=0.8,label = plot_label_1 + plot_label_2 + plot_label_3)
 
+                                        title = "Without long-range connections" if k == 0 else "With 10% long-range connections"
+                                        # ax.set_title(title)
+                                        props = dict(boxstyle='round', facecolor='white', alpha=0.5)
+                                        ax.text(0.6, 0.1, title, transform=ax.transAxes, fontsize=10, fontweight='bold',
+                                                verticalalignment='top', bbox=props)
+
                             # vis_utils.set_log_tics(ax, [-2, 0], [10], format="%.2f", axis='y')
 
                             ax.set_ylim([0.65, 0.98])
@@ -938,7 +1006,18 @@ class NoiseExperimentSplit(CremiExperiment):
                             # ax.set_xscale("log")
 
                             # ax.set_xticks(np.arange(0, 1, step=0.1))
-                            ax.legend(loc="lower left")
+
+                            # Reorder legend:
+                            handles, labels = ax.get_legend_handles_labels()
+                            # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
+                            new_ordering = [3, 0, 1, 2, 4] if k == 0 else [3, 0, 1, 2, 4]
+
+                            handles = [handles[new_indx] for new_indx in new_ordering]
+                            labels = [labels[new_indx] for new_indx in new_ordering]
+
+                            loc = 'best' if k == 1 else "lower left"
+                            ax.legend(handles, labels, loc=loc)
+
                             if k == 1:
                                 ax.set_xlabel(legend_labels[key_x[-1]])
                             ax.set_ylabel(legend_labels[key_y[-1]])
@@ -974,15 +1053,15 @@ class PlotUCM(CremiExperiment):
             "sample": "B",
             "experiment_name": "plotUCM",
             "local_attraction": False,
-            "additional_model_keys": ["thresh000"],
+            # "additional_model_keys": ["thresh000"],
             "compute_scores": True,
             "save_UCM": True,
             "noise_factor": 0.
         })
         # TODO: affs noise,
         self.kwargs_to_be_iterated.update({
-            'agglo': ["GAEC_noLogCosts"],
-            # 'agglo': ["MEAN"],
+            # 'agglo': ["GAEC_noLogCosts"],
+            'agglo': ["MEAN"],
             # "noise_factor": np.concatenate((np.linspace(2., 4.5, 5), np.linspace(4.5, 10., 15)))
             # "noise_factor": [8.0]
             # 'sample': ["B"]
@@ -993,6 +1072,7 @@ class PlotUCM(CremiExperiment):
         nb_threads_pool = 1
         nb_iterations = 1
 
+        # ":,13:17,110:560,270:720", ":,:, :, :"
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(6, 7), subcrop_iter=range(6, 7),
                                                  init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations,
                                                  noise_mod='split-biased')
@@ -1019,7 +1099,9 @@ class PlotUCM(CremiExperiment):
         str_crop_slice = "1:2,13:14,110:560,270:720"  # B
         # str_crop_slice = "1:2,2:31,-1200:-200,100:1100" #C
         slc = tuple(parse_data_slice(str_crop_slice))
-        dt_path = "/export/home/abailoni/datasets/cremi/SOA_affinities/sample{}_train.h5".format(sample)
+
+        from long_range_compare.data_paths import get_hci_home_path
+        dt_path = os.path.join(get_hci_home_path(), "datasets/cremi/SOA_affinities/sample{}_train.h5".format(sample))
         inner_path_GT = "segmentations/groundtruth_fixed_OLD" if sample == "B" else "segmentations/groundtruth_fixed"
         inner_path_raw = "raw_old" if sample == "B" else "raw"
         inner_path_affs = "predictions/full_affs"
@@ -1055,14 +1137,14 @@ class PlotUCM(CremiExperiment):
             plotted_UCM[border_mask] = nb_iterations
 
             matplotlib.rcParams.update({'font.size': 15})
-            f, axes = plt.subplots(ncols=1, nrows=2, figsize=(7, 14))
+            f, axes = plt.subplots(ncols=2, nrows=1, figsize=(14, 7))
             for a in f.get_axes():
                 a.axis('off')
 
-            ax = axes[0]
+            ax = axes[1]
             cax = ax.matshow(raw[0], cmap='gray', alpha=1.)
             # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
-            cax = ax.matshow(plotted_UCM[1,0], cmap=plt.get_cmap('viridis_r'),
+            cax = ax.matshow(plotted_UCM[1,0], cmap=plt.get_cmap('Reds'),
                              interpolation='none', alpha=0.6)
             ax.matshow(vis_utils.mask_the_mask(np.logical_not(border_mask).astype('int')[1,0], value_to_mask=1.), cmap='gray',
                              interpolation='none', alpha=1.)
@@ -1079,7 +1161,7 @@ class PlotUCM(CremiExperiment):
             plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", ".pdf"))
             # plt.subplots_adjust(wspace=0, hspace=0)
             # plt.tight_layout()
-            cbar = f.colorbar(cax, ax=ax, orientation='horizontal', ticks=[0 ,nb_iterations],format='$k = %d$',fraction=0.04, pad=0.04, extend='both')
+            cbar = f.colorbar(cax, ax=ax, orientation='vertical', ticks=[0 ,nb_iterations],format='$k = %d$',fraction=0.04, pad=0.04, extend='both')
             # cbar = f.colorbar(cax, ax=axes[1], orientation='horizontal', ticks=[0 ,nb_iterations],format='$k = %d$', extend='both')
             # cbar = f.colorbar(cax, ax=ax, orientation='horizontal', ticks=[0, 380000 ,nb_iterations],format=ticker.FuncFormatter(fmt),fraction=0.04, pad=0.04, extend='both')
             cbar.solids.set_edgecolor("face")
@@ -1098,11 +1180,11 @@ class PlotUCM(CremiExperiment):
             # for a in f.get_axes():
             #     a.axis('off')
 
-            ax = axes[1]
+            ax = axes[0]
 
             # cax = ax.matshow(raw[0], cmap='gray', alpha=1.)
             # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
-            vis_utils.plot_segm(ax, segm, background=raw,highlight_boundaries=False, alpha_labels=0.5)
+            vis_utils.plot_segm(ax, segm, background=raw,highlight_boundaries=True, alpha_labels=0.5)
             # plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", "_segm.pdf"))
             plt.subplots_adjust(wspace=0, hspace=0)
             plt.tight_layout()

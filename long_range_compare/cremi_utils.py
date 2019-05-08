@@ -22,6 +22,34 @@ from .data_paths import get_hci_home_path
 from .vis_UCM import save_UCM_video
 
 
+def get_postproc_config(agglo,
+                     configs_dir_path,
+                     edge_prob=1.0,
+                     local_attraction=False,
+                     save_UCM=False,
+                     from_superpixels=False, use_multicut=False,
+                     additional_model_keys=None,
+                   mask_used_edges=None):
+    configs = {'models': yaml2dict(os.path.join(configs_dir_path, 'models_config.yml')),
+               'postproc': yaml2dict(os.path.join(configs_dir_path, 'post_proc_config.yml'))}
+    model_keys = [agglo] if not local_attraction else [agglo, "impose_local_attraction"]
+    if from_superpixels:
+        if use_multicut:
+            model_keys = ["use_fragmenter", 'multicut_exact']
+        else:
+            model_keys += ["gen_HC_DTWS"]  # DTWS
+    if additional_model_keys is not None:
+        model_keys += additional_model_keys
+    configs = adapt_configs_to_model(model_keys, debug=True, **configs)
+    post_proc_config = configs['postproc']
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_probabilities'] = edge_prob
+    if use_multicut:
+        post_proc_config['multicut_kwargs']['offsets_probabilities'] = edge_prob
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['return_UCM'] = save_UCM
+    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['mask_used_edges'] = mask_used_edges
+
+    return post_proc_config
+
 def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, agglo,
                      experiment_name, project_directory, configs_dir_path,
                      edge_prob=1.0,
@@ -36,28 +64,19 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     affinities = affinities.copy()
 
     # # FIXME: delete noise
-    # affinities += np.random.normal(scale=1e-2,size=affinities.shape)
+    # affinities += np.random.normal(scale=1e-5,size=affinities.shape)
     # affinities = np.clip(affinities, 0., 1.)
 
     offsets = get_dataset_offsets(dataset)
 
-    configs = {'models': yaml2dict(os.path.join(configs_dir_path, 'models_config.yml')),
-               'postproc': yaml2dict(os.path.join(configs_dir_path, 'post_proc_config.yml'))}
-    model_keys = [agglo] if not local_attraction else [agglo, "impose_local_attraction"]
-    if from_superpixels:
-        if use_multicut:
-            model_keys = ["use_fragmenter", 'multicut_exact']
-        else:
-            model_keys += ["gen_HC_DTWS"] #DTWS
-    if additional_model_keys is not None:
-        model_keys += additional_model_keys
-    configs = adapt_configs_to_model(model_keys, debug=True, **configs)
-    post_proc_config = configs['postproc']
-    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['offsets_probabilities'] = edge_prob
-    if use_multicut:
-        post_proc_config['multicut_kwargs']['offsets_probabilities'] = edge_prob
-    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['return_UCM'] = save_UCM
-    post_proc_config['generalized_HC_kwargs']['agglomeration_kwargs']['mask_used_edges'] = mask_used_edges
+    post_proc_config = get_postproc_config(agglo,
+                     configs_dir_path,
+                     edge_prob,
+                     local_attraction,
+                     save_UCM,
+                     from_superpixels, use_multicut,
+                     additional_model_keys,
+                   mask_used_edges)
 
     n_threads = post_proc_config.pop('nb_threads')
     invert_affinities = post_proc_config.pop('invert_affinities', False)
