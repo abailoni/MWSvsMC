@@ -805,7 +805,7 @@ class NoiseExperiment(CremiExperiment):
             'vi-split': "Variation of information - split",
             'adapted-rand': "Rand-Score",
             # 'noise_factor': "Noise factor $\mathcal{K}$ - Amount of merge-biased noise added to edge weights",
-            'noise_factor': "Amount of noise added to edge weights",
+            'noise_factor': "\\textbf{Under-clustering} noise added to edge weights",
             'energy': 'Difference in Multicut Objective'
 
         }
@@ -845,11 +845,11 @@ class NoiseExperiment(CremiExperiment):
                         rc('text', usetex=True)
                         # matplotlib.rcParams['mathtext.fontset'] = 'stix'
 
-                        matplotlib.rcParams.update({'font.size': 11})
+                        matplotlib.rcParams.update({'font.size': 12})
 
 
                         for k, selected_edge_prob in enumerate([0., 0.1]):
-                            f, axes = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
+                            f, axes = plt.subplots(ncols=1, nrows=1, figsize=(9, 3.8))
 
                             results_to_plot = {}
                             for agglo_type in [ty for ty in ['sum', 'MutexWatershed', 'mean'] if ty in results_collected_crop]:
@@ -992,7 +992,7 @@ class NoiseExperiment(CremiExperiment):
                                         argsort = np.argsort(VI_merge)
 
 
-                                        ax = axes[0]
+                                        ax = axes
                                         ax.fill_between(VI_merge[argsort], split_q_0_25[argsort],
                                                         split_q_0_75[argsort],
                                                         alpha=0.32, facecolor=colors[agglo_type][non_link][local_attraction], label=label)
@@ -1006,23 +1006,23 @@ class NoiseExperiment(CremiExperiment):
                                                 color=colors[agglo_type][non_link][local_attraction], alpha=0.8)
 
 
-                                        # Select axes with energies:
-                                        ax = axes[1]
-
-                                        ax.errorbar(VI_merge[argsort], energies[argsort] + ZERO_OFFSETS,
-                                                    # yerr=(VI_split_median - split_min, split_max - VI_split_median),
-                                                    fmt='.',
-                                                    color=colors[agglo_type][non_link][local_attraction], alpha=0.5,
-                                                    )
-                                        ax.fill_between(VI_merge[argsort], energies_perc[:,0][argsort]+ ZERO_OFFSETS,
-                                                        energies_perc[:,1][argsort] + ZERO_OFFSETS,
-                                                        alpha=0.32,
-                                                        facecolor=colors[agglo_type][non_link][local_attraction],
-                                                        label=label)
-
-
-                                        ax.plot(VI_merge[argsort], energies[argsort] + ZERO_OFFSETS, '-',
-                                                color=colors[agglo_type][non_link][local_attraction], alpha=0.8, label=label)
+                                        # # Select axes with energies:
+                                        # ax = axes[1]
+                                        #
+                                        # ax.errorbar(VI_merge[argsort], energies[argsort] + ZERO_OFFSETS,
+                                        #             # yerr=(VI_split_median - split_min, split_max - VI_split_median),
+                                        #             fmt='.',
+                                        #             color=colors[agglo_type][non_link][local_attraction], alpha=0.5,
+                                        #             )
+                                        # ax.fill_between(VI_merge[argsort], energies_perc[:,0][argsort]+ ZERO_OFFSETS,
+                                        #                 energies_perc[:,1][argsort] + ZERO_OFFSETS,
+                                        #                 alpha=0.32,
+                                        #                 facecolor=colors[agglo_type][non_link][local_attraction],
+                                        #                 label=label)
+                                        #
+                                        #
+                                        # ax.plot(VI_merge[argsort], energies[argsort] + ZERO_OFFSETS, '-',
+                                        #         color=colors[agglo_type][non_link][local_attraction], alpha=0.8, label=label)
 
                                         # title = "No long-range connections ($p_{\mathrm{long}}=0$)" if k == 0 else "10\% long-range connections ($p_{\mathrm{long}}=0.1$)"
                                         # ax.set_title(title)
@@ -1036,7 +1036,7 @@ class NoiseExperiment(CremiExperiment):
                             # ////////////////
 
 
-                            ax = axes[0]
+                            ax = axes
                             ax.set_ylim([0.55, 0.98])
                             ax.set_xlim([2, 10])
 
@@ -1056,7 +1056,7 @@ class NoiseExperiment(CremiExperiment):
 
                             ax.legend(handles, labels) #loc="lower left"
                             # if k == 1:
-                            #     ax.set_xlabel(legend_labels[key_x[-1]])
+                            ax.set_xlabel(legend_labels[key_x[-1]])
                             ax.set_ylabel(legend_labels[key_y[-1]])
 
                             if key_x[-1] in axis_ranges:
@@ -1066,48 +1066,48 @@ class NoiseExperiment(CremiExperiment):
 
 
 
-                            # ////////////////
-                            # ENERGY PLOT:
-                            # ////////////////
-                            ax = axes[1]
-                            ylim = [-100000, 1200000.] if k == 1 else [-100000, 500000.]
-                            # ax.set_ylim(ylim)
-                            ax.set_xlim([2, 10])
-
-
-                            # ax.set_yscale("log")
+                            # # ////////////////
+                            # # ENERGY PLOT:
+                            # # ////////////////
+                            # ax = axes[1]
+                            # ylim = [-100000, 1200000.] if k == 1 else [-100000, 500000.]
+                            # # ax.set_ylim(ylim)
+                            # ax.set_xlim([2, 10])
                             #
-                            # ax.set_xticks(np.arange(0, 1, step=0.1))
-
-                            # Reorder legend:
-                            handles, labels = ax.get_legend_handles_labels()
-                            # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
-                            new_ordering = [4,3,2,0,1] if k == 0 else [4,2,3,1,0]
-
-                            handles = [handles[new_indx] for new_indx in new_ordering]
-                            labels = [labels[new_indx] for new_indx in new_ordering]
-
-                            ax.legend(handles, labels) #loc="lower left"
-                            ax.set_xlabel(legend_labels[key_x[-1]])
-                            ax.set_ylabel(legend_labels[key_value[-1]])
-
-                            if key_x[-1] in axis_ranges:
-                                ax.set_xlim(axis_ranges[key_x[-1]])
-                            if key_y[-1] in axis_ranges:
-                                ax.set_ylim(axis_ranges[key_y[-1]])
-
-                            # ////////////////
-                            # SAVE PLOT:
-                            # ////////////////
-
-                            plt.subplots_adjust(hspace=0.2)
+                            #
+                            # # ax.set_yscale("log")
+                            # #
+                            # # ax.set_xticks(np.arange(0, 1, step=0.1))
+                            #
+                            # # Reorder legend:
+                            # handles, labels = ax.get_legend_handles_labels()
+                            # # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
+                            # new_ordering = [4,3,2,0,1] if k == 0 else [4,2,3,1,0]
+                            #
+                            # handles = [handles[new_indx] for new_indx in new_ordering]
+                            # labels = [labels[new_indx] for new_indx in new_ordering]
+                            #
+                            # ax.legend(handles, labels) #loc="lower left"
+                            # ax.set_xlabel(legend_labels[key_x[-1]])
+                            # ax.set_ylabel(legend_labels[key_value[-1]])
+                            #
+                            # if key_x[-1] in axis_ranges:
+                            #     ax.set_xlim(axis_ranges[key_x[-1]])
+                            # if key_y[-1] in axis_ranges:
+                            #     ax.set_ylim(axis_ranges[key_y[-1]])
+                            #
+                            # # ////////////////
+                            # # SAVE PLOT:
+                            # # ////////////////
+                            #
+                            plt.subplots_adjust(bottom=0.15)
 
                             plot_dir = os.path.join(project_directory, exp_name, "plots")
                             check_dir_and_create(plot_dir)
 
                             # f.suptitle("Crop of CREMI sample {} (90 x 300 x 300)".format(sample))
                             f.savefig(os.path.join(plot_dir,
-                                                   'noise_plot_{}_{}.pdf'.format(sample,k)),
+                                                   'under_segment_plots_{}.pdf'.format(k)),
                                       format='pdf')
 
 
@@ -1459,13 +1459,13 @@ class NoiseExperimentSplit(CremiExperiment):
             'vi-merge': "Variation of information - merge",
             'vi-split': "Variation of information - split",
             'adapted-rand': "Rand-Score",
-            'noise_factor': "Noise factor $\mathcal{K}$ - Amount of split-biased noise added to edge weights",
+            'noise_factor': "\\textbf{Over-clustering} noise added to edge weights",
             'energy': 'Multicut energy'
 
         }
 
         update_rule_names = {
-            'sum': "Sum", 'MutexWatershed': "Absolute Max", 'mean': "Mean"
+            'sum': "Sum", 'MutexWatershed': "Absolute Max + Cannot-Link Constr.", 'mean': "Mean"
         }
 
         axis_ranges = {
@@ -1491,12 +1491,15 @@ class NoiseExperimentSplit(CremiExperiment):
                             continue
 
                         results_collected_crop = results_collected[sample][crop][subcrop]
-
-                        matplotlib.rcParams.update({'font.size': 10})
-                        f, axes = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
+                        from matplotlib import rc
+                        rc('text', usetex=True)
+                        matplotlib.rcParams.update({'font.size': 12})
+                        # f, axes = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
 
                         for k, selected_edge_prob in enumerate([0., 0.1]):
-                            ax = axes[k]
+                            f, axes = plt.subplots(ncols=1, nrows=1, figsize=(9, 3.8))
+
+                            ax = axes
                             for agglo_type in [ty for ty in ['sum', 'MutexWatershed', 'mean'] if ty in results_collected_crop]:
                                 for non_link in [ty for ty in ['False', 'True'] if
                                                  ty in results_collected_crop[agglo_type]]:
@@ -1631,11 +1634,11 @@ class NoiseExperimentSplit(CremiExperiment):
                                         # ax.plot(np.linspace(0.0, 0.9, 15), [VI_split[0] for _ in range(15)], '.-',
                                         #         color=colors[agglo_type][non_link][local_attraction], alpha=0.8,label = plot_label_1 + plot_label_2 + plot_label_3)
 
-                                        title = "Without long-range connections" if k == 0 else "With 10% long-range connections"
-                                        # ax.set_title(title)
-                                        props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-                                        ax.text(0.6, 0.1, title, transform=ax.transAxes, fontsize=10, fontweight='bold',
-                                                verticalalignment='top', bbox=props)
+                                        # title = "Without long-range connections" if k == 0 else "With 10% long-range connections"
+                                        # # ax.set_title(title)
+                                        # props = dict(boxstyle='round', facecolor='white', alpha=0.5)
+                                        # ax.text(0.6, 0.1, title, transform=ax.transAxes, fontsize=10, fontweight='bold',
+                                        #         verticalalignment='top', bbox=props)
 
                             # vis_utils.set_log_tics(ax, [-2, 0], [10], format="%.2f", axis='y')
 
@@ -1657,14 +1660,14 @@ class NoiseExperimentSplit(CremiExperiment):
                             # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
                             new_ordering = [3, 0, 1, 2, 4] if k == 0 else [3, 0, 1, 2, 4]
 
-                            # handles = [handles[new_indx] for new_indx in new_ordering]
-                            # labels = [labels[new_indx] for new_indx in new_ordering]
+                            handles = [handles[new_indx] for new_indx in new_ordering]
+                            labels = [labels[new_indx] for new_indx in new_ordering]
 
                             loc = 'best' if k == 1 else "lower left"
-                            # ax.legend(handles, labels, loc=loc)
+                            ax.legend(handles, labels, loc=loc)
 
-                            if k == 1:
-                                ax.set_xlabel(legend_labels[key_x[-1]])
+                            # if k == 1:
+                            ax.set_xlabel(legend_labels[key_x[-1]])
                             ax.set_ylabel(legend_labels[key_y[-1]])
 
                             if key_x[-1] in axis_ranges:
@@ -1674,13 +1677,14 @@ class NoiseExperimentSplit(CremiExperiment):
 
                             # ax.set_xlim([0.15, 0.35])
 
-                        plot_dir = os.path.join(project_directory, exp_name, "plots")
-                        check_dir_and_create(plot_dir)
+                            plot_dir = os.path.join(project_directory, exp_name, "plots")
+                            check_dir_and_create(plot_dir)
+                            plt.subplots_adjust(bottom=0.15)
 
-                        # f.suptitle("Crop of CREMI sample {} (90 x 300 x 300)".format(sample))
-                        f.savefig(os.path.join(plot_dir,
-                                               'noise_plot_{}_deep_z_noise_local.pdf'.format(sample)),
-                                  format='pdf')
+                            # f.suptitle("Crop of CREMI sample {} (90 x 300 x 300)".format(sample))
+                            f.savefig(os.path.join(plot_dir,
+                                                   'over_segment_plots_{}.pdf'.format(k)),
+                                      format='pdf')
 
 
 
@@ -1696,16 +1700,17 @@ class PlotUCM(CremiExperiment):
             "WS_growing": True,
             "edge_prob": 1.0,
             "sample": "B",
-            "experiment_name": "plotUCM",
+            "experiment_name": "plotUCM_v2",
             "local_attraction": False,
-            # "additional_model_keys": ["thresh000"],
+            "additional_model_keys": ["thresh000"],
             "compute_scores": True,
             "save_UCM": True,
             "noise_factor": 0.
         })
-        # TODO: affs noise,
+        # TODO: affs noise, MWS
         self.kwargs_to_be_iterated.update({
             # 'agglo': ["GAEC_noLogCosts"],
+            # 'agglo': ["MEAN"],
             'agglo': ["MEAN"],
             # "noise_factor": np.concatenate((np.linspace(2., 4.5, 5), np.linspace(4.5, 10., 15)))
             # "noise_factor": [8.0]
@@ -1741,9 +1746,13 @@ class PlotUCM(CremiExperiment):
         # from .load_datasets import get_dataset_data
         # affs, GT = get_dataset_data("CREMI", "B", ":,13:14,110:560,270:720", run_connected_components=False)
         sample = "B"
-        str_crop_slice = "1:2,13:14,110:560,270:720"  # B
+        # str_crop_slice = "1:2,13:14,110:560,270:720"  # B
+        str_crop_slice = ":,33:38,:1050,:1050"  # B
+        SLICE = 1
+        SUB_SLICE = ":,:,:1000,:1000"
         # str_crop_slice = "1:2,2:31,-1200:-200,100:1100" #C
         slc = tuple(parse_data_slice(str_crop_slice))
+        sub_slc = tuple(parse_data_slice(SUB_SLICE))
 
         from long_range_compare.data_paths import get_hci_home_path
         dt_path = os.path.join(get_hci_home_path(), "datasets/cremi/SOA_affinities/sample{}_train.h5".format(sample))
@@ -1757,6 +1766,8 @@ class PlotUCM(CremiExperiment):
             raw = f[inner_path_raw][slc[1:]].astype('float32') / 255.
             affs = f[inner_path_affs][slc]
 
+        affs = affs[sub_slc]
+
 
         # IMPORT EXPERIMENTS:
         exp_name = self.fixed_kwargs['experiment_name']
@@ -1765,12 +1776,38 @@ class PlotUCM(CremiExperiment):
 
         scores_path = os.path.join(project_directory, exp_name, "UCM")
 
+        first = True
         for config_dict, config_filename in zip(configs, json_files):
+
+            if first:
+                # Plot affinities:
+                f, axes = plt.subplots(ncols=1, nrows=4, figsize=(14, 28))
+                for a in f.get_axes():
+                    a.axis('off')
+
+                axes[0].matshow(raw[SLICE], cmap='gray', interpolation='none')
+                axes[1].matshow(affs[1,SLICE], cmap='gray_r', interpolation='none')
+                axes[2].matshow(affs[10,SLICE], cmap='gray_r', interpolation='none')
+                axes[3].matshow(affs[11,SLICE], cmap='gray_r', interpolation='none')
+
+                plt.subplots_adjust(wspace=0, hspace=0)
+                # plt.tight_layout()
+                # f.savefig(plot_path, format='pdf')
+                plot_path = os.path.join(project_directory, exp_name, "plots", "affs.pdf")
+                f.savefig(plot_path, format='pdf')
+                first = False
+
             # PLOT UCM:
 
             ucm_path = os.path.join(project_directory, exp_name, "UCM", config_filename.replace(".json",".h5"))
 
-            UCM = vigra.readHDF5(ucm_path, 'merge_times')
+            UCM = vigra.readHDF5(ucm_path, 'merge_times')[sub_slc]
+
+            segm_path = os.path.join(project_directory, exp_name, "out_segms", config_filename.replace(".json", ".h5"))
+
+            segm = vigra.readHDF5(segm_path, 'segm_WS')[sub_slc[1:]]
+
+
 
             mask_1 = UCM == -15
             nb_nodes = UCM.max()
@@ -1786,13 +1823,18 @@ class PlotUCM(CremiExperiment):
             for a in f.get_axes():
                 a.axis('off')
 
-            ax = axes[1]
-            cax = ax.matshow(raw[0], cmap='gray', alpha=1.)
+            ax = axes[0]
+            cax = ax.matshow(raw[SLICE], cmap='gray', alpha=1.)
             # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
-            cax = ax.matshow(plotted_UCM[1,0], cmap=plt.get_cmap('Reds'),
+            cax = ax.matshow(plotted_UCM[1,SLICE], cmap=plt.get_cmap('Reds'),
                              interpolation='none', alpha=0.6)
-            ax.matshow(vis_utils.mask_the_mask(np.logical_not(border_mask).astype('int')[1,0], value_to_mask=1.), cmap='gray',
-                             interpolation='none', alpha=1.)
+            # ax.matshow(vis_utils.mask_the_mask(np.logical_not(border_mask).astype('int')[1,SLICE], value_to_mask=1.), cmap='gray',
+            #                  interpolation='none', alpha=1.)
+            vis_utils.plot_segm(ax, segm, highlight_boundaries=True, alpha_labels=0., z_slice=SLICE,
+                                alpha_boundary=1.)
+
+            # Plot thick border:
+
 
             # f.colorbar(cax, ax=ax, orientation='horizontal', extend='both')
 
@@ -1804,20 +1846,11 @@ class PlotUCM(CremiExperiment):
 
             check_dir_and_create(os.path.join(project_directory, exp_name, "plots"))
             plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", ".pdf"))
-            # plt.subplots_adjust(wspace=0, hspace=0)
-            # plt.tight_layout()
-            cbar = f.colorbar(cax, ax=ax, orientation='vertical', ticks=[0 ,nb_iterations],format='$k = %d$',fraction=0.04, pad=0.04, extend='both')
-            # cbar = f.colorbar(cax, ax=axes[1], orientation='horizontal', ticks=[0 ,nb_iterations],format='$k = %d$', extend='both')
-            # cbar = f.colorbar(cax, ax=ax, orientation='horizontal', ticks=[0, 380000 ,nb_iterations],format=ticker.FuncFormatter(fmt),fraction=0.04, pad=0.04, extend='both')
-            cbar.solids.set_edgecolor("face")
-            # cbar.TickLabelInterpreter = 'tex';
-            # cbar.ax.set_xticklabels(['$k$=0', '$k$=380', 'High'])
+            # cbar = f.colorbar(cax, ax=ax, orientation='vertical', ticks=[0 ,nb_iterations],format='$k = %d$',fraction=0.04, pad=0.04, extend='both')
+            # cbar.solids.set_edgecolor("face")
 
 
             # PLOT SEGM:
-            segm_path = os.path.join(project_directory, exp_name, "out_segms", config_filename.replace(".json", ".h5"))
-
-            segm = vigra.readHDF5(segm_path, 'segm')
 
 
             # matplotlib.rcParams.update({'font.size': 15})
@@ -1825,14 +1858,14 @@ class PlotUCM(CremiExperiment):
             # for a in f.get_axes():
             #     a.axis('off')
 
-            ax = axes[0]
+            ax = axes[1]
 
             # cax = ax.matshow(raw[0], cmap='gray', alpha=1.)
             # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
-            vis_utils.plot_segm(ax, segm, background=raw,highlight_boundaries=True, alpha_labels=0.5)
+            vis_utils.plot_segm(ax, segm, background=raw,highlight_boundaries=True, z_slice=SLICE, alpha_labels=0.5, alpha_boundary=1.)
             # plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", "_segm.pdf"))
             plt.subplots_adjust(wspace=0, hspace=0)
-            plt.tight_layout()
+            # plt.tight_layout()
             # f.savefig(plot_path, format='pdf')
 
             f.savefig(plot_path, format='pdf')
