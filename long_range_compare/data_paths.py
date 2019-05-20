@@ -5,7 +5,7 @@ def get_hci_home_path():
     username = getpass.getuser()
     hostname = socket.gethostname()
     if hostname == 'trendytukan' and username == 'abailoni':
-        return '/net/hciserver03/storage/abailoni/'
+        return '/net/hcihome/storage/abailoni/'
     elif hostname == 'trendytukan' and username == 'abailoni_local':
         return '/home/abailoni_local/hci_home/'
     elif hostname == 'ialgpu01' or hostname == 'birdperson' or hostname == 'sirherny':
@@ -13,7 +13,7 @@ def get_hci_home_path():
     elif hostname == 'quadxeon5':
         return '/srv/scratch/abailoni'
     else:
-        return '/net/hciserver03/storage/abailoni/'
+        return '/net/hcihome/storage/abailoni/'
 
 def get_trendytukan_drive_path():
     username = getpass.getuser()
@@ -28,4 +28,4 @@ def get_trendytukan_drive_path():
     elif hostname == 'quadxeon5':
         return '/srv/scratch/abailoni'
     else:
-        return '/net/hciserver03/storage/abailoni/trendyTukan_drive/'
+        return '/net/hcihome/storage/abailoni/trendyTukan_drive/'

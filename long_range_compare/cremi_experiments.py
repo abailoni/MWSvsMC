@@ -194,7 +194,7 @@ class FullTestSamples(CremiExperiment):
             "use_multicut": False,
             "save_segm": True,
             "WS_growing": False,
-            "edge_prob": 0.9,
+            "edge_prob": 0.1,
             # "sample": "B",
             "experiment_name": "FullTestSamples",
             "local_attraction": False,
@@ -239,7 +239,7 @@ class FullTestSamples(CremiExperiment):
         from cremi import Annotations, Volume
         from cremi.io import CremiFile
 
-        for sample in ["B+"]:
+        for sample in ["A+", "C+"]:
             results_collected_crop = results_collected[sample][CREMI_crop_slices[sample][0]][CREMI_sub_crops_slices[6]]
 
             for agglo_type in [ty for ty in ['mean'] if ty in results_collected_crop]:
@@ -317,14 +317,16 @@ class FullTrainSamples(CremiExperiment):
         })
 
         self.kwargs_to_be_iterated.update({
-            'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
-            # 'agglo': ["MEAN_constr", "GAEC", "greedyFixation"],
-            'sample': ["C", "A", "B"],
+            # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
+            # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
+            # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
+            'agglo': ["SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "SingleLinkage"],
+            'sample': ["A", "B", "C"],
             # 'sample': ["B+", "A+", "C+"]
         })
 
     def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 1
+        nb_threads_pool = 8
         nb_iterations = 1
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(4, 5), subcrop_iter=range(6, 7),
@@ -332,6 +334,301 @@ class FullTrainSamples(CremiExperiment):
 
         return kwargs_iter, nb_threads_pool
 
+    def collect_scores(self, project_directory):
+        exp_name = self.fixed_kwargs['experiment_name']
+        scores_path = os.path.join(project_directory, exp_name, "scores")
+        config_list, json_file_list = self.get_list_of_runs(scores_path)
+
+        def assign_color(value, good_thresh, bad_thresh, nb_flt, best="lowest"):
+            if best == "lowest":
+                if value < good_thresh:
+                    return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value > good_thresh and value < bad_thresh:
+                    return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value > bad_thresh:
+                    return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            elif best == "highest":
+                if value > good_thresh:
+                    return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value < good_thresh and value > bad_thresh:
+                    return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value < bad_thresh:
+                    return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            else:
+                raise ValueError
+
+        collected_results = []
+        energies, ARAND = [], []
+        SEL_PROB = 0.1
+
+        sorting_column_idx = 0
+
+        keys_to_collect = [
+            ['score_WS','adapted-rand'],
+            ['score_WS','vi-merge'],
+            ['energy'],
+            ['runtime']
+        ]
+
+        collected_results = []
+        for agglo_type in ['MutexWatershed', 'mean', 'sum']:
+            for non_link in ['False', 'True']:
+                new_table_entrance = [agglo_type, non_link]
+                collected_configs = []
+                for config, json_file in zip(config_list, json_file_list):
+                    if config["agglo_type"] == agglo_type and config["non_link"] == eval(non_link):
+                        collected_configs.append(config)
+                if len(collected_configs) == 0:
+                    continue
+
+                result_matrix = np.empty((len(collected_configs), len(keys_to_collect)) )
+                for i, config in enumerate(collected_configs):
+                    for j, key in enumerate(keys_to_collect):
+                        result_matrix[i,j] = return_recursive_key_in_dict(config, key)
+
+                new_table_entrance += list(result_matrix.mean(axis=0)) + list(result_matrix.std(axis=0))
+                collected_results.append(new_table_entrance)
+
+        collected_results = np.array(collected_results)
+        collected_results = collected_results[collected_results[:,sorting_column_idx+2].argsort()]
+        np.savetxt(os.path.join(scores_path, "collected.csv"), collected_results, delimiter=' & ',
+                   fmt='%s',
+                   newline=' \\\\\n')
+
+
+
+    def make_plots(self, project_directory):
+        self.collect_scores(project_directory)
+
+
+        exp_name = self.fixed_kwargs['experiment_name']
+        scores_path = os.path.join(project_directory, exp_name, "scores")
+        results_collected = self.get_plot_data(scores_path)
+
+        key_x = ['score_WS', 'vi-merge']
+        key_y = ['score_WS', 'adapted-rand']
+        # key_y = ['score_WS', 'vi-split']
+        # key_y = ['energy']
+        # key_x = ['runtime']
+        key_value = ['runtime']
+        # FIXME: CHANGE FROM NOISE TO PROBS
+
+        # TODO: reduce MWS RUNTIME by a constant
+
+        colors = {'MutexWatershed': {'False': {'True': 'C4', 'False': 'C0'}},
+                  'mean': {'False': {'True': 'C5', 'False': 'C1'},
+                           'True': {'True': 'C6', 'False': 'C8'}},
+                  'sum': {'False': {'False': 'C2'},
+                          'True': {'False': 'C3'}},
+                  }
+
+        markers = {'MutexWatershed': {'False': {'False': '^'}},
+                   'mean': {'False': {'False': 'o'},
+                            'True': {'False': 'X'}},
+                   'sum': {'False': {'False': 's'},
+                           'True': {'False': '2'}},
+                   }
+
+        legend_axes = {
+            'vi-merge': "Variation of information - merge",
+            'vi-split': "Variation of information - split",
+            'adapted-rand': "Adapted RAND",
+        }
+
+        exp_name_data = {
+            "full_cremi": "agglo",
+            "full_cremi_standardHC": ["black", "WSDT superpixels + Agglomeration (mean)"],
+            # "full_cremi_standardHC_onlyShort": ["cyan", "WSDT superpixels + Avg. Agglo (only direct neigh)"],
+            # "full_cremi_MC":["black", "WSDT superpixels + Multicut"]
+
+        }
+
+        legend_labels = {'MutexWatershed': {'False': 'Mutex Watershed'},
+                         'mean': {'False': 'Mean',
+                                  'True': 'Mean + Cannot-Link'},
+                         'sum': {'False': 'Sum',
+                                 'True': 'Sum + Cannot-Link'},
+                         }
+
+        marker_list = ['^', 'o', 'X', 's', '2']
+
+        selected_prob = 0.07
+        print('\n')
+        label_names = []
+        color_list = []
+
+        # Find best values for every crop:
+        matplotlib.rcParams.update({'font.size': 9})
+        ncols, nrows = 3, 1
+        f, all_ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(13, 7))
+        all_sample_values = None
+        for nb_sample, sample in enumerate(["A", "B", "C"]):
+            cumulated_values = {'True': [None, None], 'False': [None, None]}
+            counter = 0
+
+            ax = all_ax[nb_sample]
+
+            for crop in CREMI_crop_slices[sample]:
+                for subcrop in CREMI_sub_crops_slices:
+                    results_collected_crop = results_collected[sample][crop][subcrop]
+
+                    # Skip if the dict is empty:
+                    if not results_collected_crop:
+                        continue
+
+                    if crop not in CREMI_crop_slices[sample][4] or subcrop not in CREMI_sub_crops_slices[6]:
+                        continue
+
+                    print(sample, crop, subcrop)
+
+                    scores = {'True': [[], []], 'False': [[], []]}
+
+                    label_names = []
+                    color_list = []
+
+                    type_counter = 0
+                    for agglo_type in [ty for ty in ['MutexWatershed', 'mean', 'sum'] if ty in results_collected_crop]:
+                        for non_link in ['False', 'True']:
+                            if non_link not in results_collected_crop[agglo_type]:
+                                continue
+                            label_names.append(legend_labels[agglo_type][non_link])
+                            # if eval(non_link):
+                            #     label_names.append("{} + cannot-link".format(agglo_type))
+                            # else:
+                            #     label_names.append("{}".format(agglo_type))
+                            for local_attraction in ['False']:
+                                color_list.append(colors[agglo_type][non_link][local_attraction])
+                                if local_attraction not in results_collected_crop[agglo_type][non_link]:
+                                    mean = np.nan
+                                    err = np.nan
+                                else:
+                                    sub_dict = results_collected_crop[agglo_type][non_link][local_attraction]
+                                    values = []
+                                    error_bars = []
+                                    multiple_values = []
+
+                                    for edge_prob in sub_dict:
+                                        for ID in sub_dict[edge_prob]:
+                                            data_dict = sub_dict[edge_prob][ID]
+                                            # exp_name = data_dict.get('postproc_config', {}).get('experiment_name',
+                                            #                                                     "")
+                                            # if exp_name not in exp_name_data:
+                                            #     # full_cremi, full_cremi_MC
+                                            #     continue
+                                            new_data = [return_recursive_key_in_dict(data_dict, key_x),
+                                                        return_recursive_key_in_dict(data_dict, key_y),
+                                                        return_recursive_key_in_dict(data_dict, key_value)]
+                                            # if agglo_type == 'max':
+                                            #     new_data[2] -= 80
+
+                                            # if exp_name == "full_cremi":
+                                            lab = label_names[-1]
+                                            print(edge_prob, sample, agglo_type, non_link)
+                                            ax.scatter(new_data[0], new_data[1],
+                                                       c=color_list[-1],
+                                                       marker='o', alpha=0.7, s=100,
+                                                       label=lab)
+                                            # else:
+                                            #     print(ID)
+                                            #     print(edge_prob, exp_name)
+                                            #     ax.scatter(new_data[0], new_data[1], c=exp_name_data[exp_name][0],
+                                            #                marker='o', alpha=0.7, s=100,
+                                            #                label=exp_name_data[exp_name][1])
+
+                                            # multiple_values.append(new_data)
+                                        if len(multiple_values) == 0:
+                                            continue
+                                        # multiple_values = np.array(multiple_values)
+                                        # mean = multiple_values.mean(axis=0)
+                                        # err = multiple_values.std(axis=0)
+                                        # ax.scatter(multiple_values[:,0], multiple_values[:,1], c=color_list[-1],
+                                        #            marker='o', alpha=0.5, s=30, label=lab)
+
+                                        # multiple_values = multiple_values[:,:2]
+
+                                # scores[local_attraction][0].append(mean)
+                                # scores[local_attraction][1].append(err)
+                                type_counter += 0
+                    if len(scores['False'][0]) == 0:
+                        continue
+
+                    all_values = []
+                    for local_attraction in ['False']:
+                        all_values += scores[local_attraction][0]
+                        scores[local_attraction] = np.array(scores[local_attraction])
+
+                    # # Check if all the update rules were computed:
+                    # if np.isnan(all_values).sum() > 4:
+                    #     print("Sample {}, crop {}, subcrop {} was not complete!".format(sample,crop,subcrop))
+                    #     # print(all_values)
+                    #     # continue
+                    #
+                    # # max_value = np.nanmax(np.array(all_values), axis=0, keepdims=True)
+                    # # min_value = np.nanmin(np.array(all_values), axis=0, keepdims=True)
+                    #
+                    #
+                    # # Convert to relative values:
+                    # for local_attraction in ['False']:
+                    #     # scores[local_attraction][0] = (scores[local_attraction][0] - min_value) / (max_value-min_value)
+                    #     # scores[local_attraction][1] = (scores[local_attraction][1]) / (max_value-min_value)
+                    #
+                    #     nb_types = scores[local_attraction][0].shape[0]
+                    #
+                    #     for i in range(nb_types):
+                    #         dt = scores[local_attraction][0]
+                    #         # ax.scatter(dt[i, 0], dt[i, 1], c=color_list[i],
+                    #         #        marker='s', alpha=0.3, s=50)
+                    #         # lab = label_names[i] if counter==0 else None
+                    #         lab = label_names[i]
+                    #         # ax.errorbar(scores[local_attraction][0][ i, 0], scores[local_attraction][0][ i, 1],
+                    #         #             xerr=scores[local_attraction][1][ i, 0], yerr=scores[local_attraction][1][ i, 1], fmt='.',
+                    #         #             label=lab,
+                    #         #             color=color_list[i], alpha=0.8)
+                    #
+                    #     for i in range(2):
+                    #         if cumulated_values[local_attraction][i] is None:
+                    #             cumulated_values[local_attraction][i] = scores[local_attraction][i]
+                    #         else:
+                    #             cumulated_values[local_attraction][i] = np.nansum(np.stack((scores[local_attraction][i], cumulated_values[local_attraction][i])), axis=0)
+
+                    counter += 1
+
+            ax.set_xlabel(legend_axes[key_x[-1]])
+            ax.set_ylabel(legend_axes[key_y[-1]])
+            # if all_keys[-1] == 'energy':
+            #     min_value = min_value-max_error
+            # else:
+            #     min_value = max([min_value-max_error, 0])
+            # ax.set_ylim([min_value, max_value+max_error])
+            # ax.set_xticklabels(tuple(label_names))
+            # ax.legend(loc='lower right')
+            lgnd = ax.legend()
+            for i in range(10):
+                try:
+                    lgnd.legendHandles[i]._sizes = [30]
+                except IndexError:
+                    break
+
+            ax.set_title("CREMI training sample {}".format(sample))
+
+            # if sample == "B":
+            #     ax.set_ylim([0.080, 0.090])
+            # else:
+            ax.autoscale(enable=True, axis='both')
+
+            # if all_keys[-1] == 'runtime':
+            #     ax.set_yscale("log", nonposy='clip')
+
+        # plt.subplots_adjust(bottom=0.05, top=0.95, hspace = 0.3)
+        plt.subplots_adjust(left=0.05, right=0.95, wspace=0.3)
+
+        plot_dir = os.path.join(project_directory, exp_name, "plots")
+        check_dir_and_create(plot_dir)
+
+        # f.suptitle("Crop of CREMI sample {} (90 x 300 x 300)".format(sample))
+        f.savefig(os.path.join(plot_dir,
+                               'relative_merge_split_WS_sup_{}_full_CREMI.pdf'.format(selected_prob)),
+                  format='pdf')
 
 
 class CropTrainSamples(CremiExperiment):
@@ -485,7 +782,347 @@ class NoiseExperiment(CremiExperiment):
                   'sum': {'False': {'False': 'C2'},
                           'True': {'False': 'C3'}},
                   }
+        # TODO: changed
+        # key_y = ['score_WS', 'vi-merge']
+        key_y = ['score_WS', 'adapted-rand']
+        key_x = ['noise_factor']
+        # key_y = ['score_WS', 'vi-split']
+        # key_y = ['energy']
+        # key_x = ['runtime']
+        key_value = ['energy']
 
+
+        list_all_keys = [
+            ['score_WS', 'adapted-rand'],
+            # ['score_WS', "vi-merge"],
+            # ['score_WS', "vi-split"],
+            # ['energy'],
+            # ['runtime']
+        ]
+
+        legend_labels = {
+            'vi-merge': "Variation of information - merge",
+            'vi-split': "Variation of information - split",
+            'adapted-rand': "Rand-Score",
+            # 'noise_factor': "Noise factor $\mathcal{K}$ - Amount of merge-biased noise added to edge weights",
+            'noise_factor': "Amount of noise added to edge weights",
+            'energy': 'Difference in Multicut Objective'
+
+        }
+
+        update_rule_names = {
+            'sum': "Sum", 'MutexWatershed': "Absolute Max + Cannot-Link Constr.", 'mean': "Average"
+        }
+
+        axis_ranges = {
+            # 'vi-merge': [0.15, 0.35],
+            'vi-split': None,
+            # 'adapted-rand': [0.027, 0.052],
+        }
+
+        for all_keys in list_all_keys:
+
+            print('\n')
+            print(all_keys)
+
+            # Find best values for every crop:
+            for sample in CREMI_crop_slices:
+                cumulated_values = {'True': [None, None], 'False': [None, None]}
+                counter = 0
+                for crop in CREMI_crop_slices[sample]:
+                    for subcrop in CREMI_sub_crops_slices:
+
+                        if sample != 'B' or crop != CREMI_crop_slices['B'][5] or subcrop != \
+                                CREMI_sub_crops_slices[5]:
+                            continue
+
+                        results_collected_crop = results_collected[sample][crop][subcrop]
+
+                        from matplotlib import rc
+                        # rc('font', **{'family': 'serif', 'serif': ['Times']})
+                        ## for Palatino and other serif fonts use:
+                        # rc('font',**{'family':'serif','serif':['Palatino']})
+                        rc('text', usetex=True)
+                        # matplotlib.rcParams['mathtext.fontset'] = 'stix'
+
+                        matplotlib.rcParams.update({'font.size': 11})
+
+
+                        for k, selected_edge_prob in enumerate([0., 0.1]):
+                            f, axes = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
+
+                            results_to_plot = {}
+                            for agglo_type in [ty for ty in ['sum', 'MutexWatershed', 'mean'] if ty in results_collected_crop]:
+                                for non_link in [ty for ty in ['False', 'True'] if
+                                                 ty in results_collected_crop[agglo_type]]:
+                                    for local_attraction in [ty for ty in ['False'] if
+                                                             ty in results_collected_crop[agglo_type][non_link]]:
+
+                                        sub_dict = results_collected_crop[agglo_type][non_link][local_attraction]
+
+                                        probs = []
+                                        VI_split_median = []
+                                        VI_merge = []
+                                        runtimes = []
+                                        runtimes_perc = []
+                                        split_max = []
+                                        split_min = []
+                                        split_q_0_25 = []
+                                        split_q_0_75 = []
+                                        error_bars_merge = []
+                                        counter_per_type = 0
+                                        for noise_factor in sub_dict:
+                                            multiple_VI_split = []
+                                            multiple_VI_merge = []
+                                            multiple_runtimes = []
+                                            for ID in sub_dict[noise_factor]:
+                                                data_dict = sub_dict[noise_factor][ID]
+
+                                                if data_dict["edge_prob"] != selected_edge_prob:
+                                                    continue
+
+                                                # ZERO_CONSTANT = 5512152.22595745 if k == 0 else 10854057.255651988
+
+                                                multiple_VI_split.append(
+                                                    return_recursive_key_in_dict(data_dict, key_y))
+                                                multiple_VI_merge.append(
+                                                    return_recursive_key_in_dict(data_dict, key_x))
+                                                multiple_runtimes.append(
+                                                    return_recursive_key_in_dict(data_dict, key_value))
+                                                if key_y[-1] == 'adapted-rand':
+                                                    multiple_VI_split[-1] = 1 - multiple_VI_split[-1]
+
+                                                counter_per_type += 1
+                                            if len(multiple_VI_split) == 0:
+                                                continue
+                                            probs.append(float(noise_factor))
+
+                                            multiple_VI_split = np.array(multiple_VI_split)
+                                            VI_split_median.append(np.median(multiple_VI_split))
+                                            split_max.append(multiple_VI_split.max())
+                                            split_min.append(multiple_VI_split.min())
+                                            split_q_0_25.append(np.percentile(multiple_VI_split, 25))
+                                            split_q_0_75.append(np.percentile(multiple_VI_split, 75))
+
+                                            multiple_VI_merge = np.array(multiple_VI_merge)
+                                            VI_merge.append(multiple_VI_merge.mean())
+                                            error_bars_merge.append(multiple_VI_merge.std())
+
+                                            multiple_runtimes = np.array(multiple_runtimes)
+                                            runtimes.append(multiple_runtimes.mean())
+                                            runtimes_perc.append([np.percentile(multiple_runtimes, 25), np.percentile(multiple_runtimes, 75)] )
+
+                                            # ax.scatter(multiple_VI_merge, multiple_VI_split, s=np.ones_like(multiple_VI_merge)*edge_prob * 500,
+                                            #            c=colors[agglo_type][non_link][local_attraction], marker='o',
+                                            #            alpha=0.3)
+
+                                        if len(probs) == 0:
+                                            continue
+                                        probs = np.array(probs)
+
+                                        split_max = np.array(split_max)
+                                        split_min = np.array(split_min)
+                                        VI_split_median = np.array(VI_split_median)
+
+                                        # Set energy to zero:
+                                        # if k == 0:
+                                        #     VI_split_median +=
+                                        # else:
+                                        #     VI_split_median += 10854057.255651988
+
+                                        split_q_0_25 = np.array(split_q_0_25)
+                                        split_q_0_75 = np.array(split_q_0_75)
+
+                                        error_bars_merge = np.array(error_bars_merge)
+                                        VI_merge = np.array(VI_merge)
+
+                                        runtimes = np.array(runtimes)
+                                        runtimes_perc = np.array(runtimes_perc)
+
+                                        results_to_plot[agglo_type+non_link] = (VI_split_median, runtimes, VI_merge, split_q_0_25, split_q_0_75, counter_per_type, runtimes_perc)
+
+                                        # if (agglo_type=='mean' and non_link == 'True') or (agglo_type=='max' and local_attraction=='True'):
+                                        #     continue
+
+
+                            # Compute energy zero offsets:
+                            all_energies = np.stack([results_to_plot[agg][1] for agg in results_to_plot])
+                            all_merge = np.stack([results_to_plot[agg][2] for agg in results_to_plot])
+                            for j in range(all_merge.shape[0]):
+                                all_energies[j] = all_energies[j,np.argsort(all_merge[j,:])]
+                                # all_merge[j] = all_merge[j, np.argsort(all_merge[j, :])]
+                            ZERO_OFFSETS = -all_energies.mean(axis=0)
+                            # ZERO_OFFSETS = all_energies.min(axis=0)
+                            # ZERO_OFFSETS = 1
+                            # prova = all_median[:,np.argsort(all_merge,axis=1)]
+
+
+                            for agglo_type in [ty for ty in ['sum', 'MutexWatershed', 'mean'] if
+                                               ty in results_collected_crop]:
+                                for non_link in [ty for ty in ['False', 'True'] if
+                                                 ty in results_collected_crop[agglo_type]]:
+                                    for local_attraction in [ty for ty in ['False'] if
+                                                             ty in results_collected_crop[agglo_type][
+                                                                 non_link]]:
+
+                                        VI_split_median, energies, VI_merge, split_q_0_25, split_q_0_75, counter_per_type, energies_perc = results_to_plot[agglo_type + non_link]
+
+                                        # Compose plot label:
+                                        plot_label_1 = update_rule_names[agglo_type]
+                                        plot_label_2 = " + Cannot-Link Constr." if eval(non_link) else " "
+                                        plot_label_3 = "(local edges attractive)" if eval(local_attraction) else ""
+
+                                        if all_keys[-1] == 'runtime':
+                                            error_bars_split = None
+
+                                        # if all_keys[-1] == 'energy':
+                                        #     values = -values
+
+                                        # print(runtimes.min(), runtimes.max())
+                                        # runtimes -= 0.027
+                                        # runtimes /= 0.2
+                                        # runtimes = (1 - runtimes) * 500
+                                        # print(runtimes.min(), runtimes.max())
+
+                                        print("Found in {}: {}".format(agglo_type, counter_per_type))
+
+
+                                        label = plot_label_1 + plot_label_2 + plot_label_3
+
+                                        argsort = np.argsort(VI_merge)
+
+
+                                        ax = axes[0]
+                                        ax.fill_between(VI_merge[argsort], split_q_0_25[argsort],
+                                                        split_q_0_75[argsort],
+                                                        alpha=0.32, facecolor=colors[agglo_type][non_link][local_attraction], label=label)
+                                        ax.errorbar(VI_merge, VI_split_median,
+                                                    # yerr=(VI_split_median - split_min, split_max - VI_split_median),
+                                                    fmt='.',
+                                                    color=colors[agglo_type][non_link][local_attraction], alpha=0.5,
+                                                    )
+
+                                        ax.plot(VI_merge[argsort], VI_split_median[argsort], '-',
+                                                color=colors[agglo_type][non_link][local_attraction], alpha=0.8)
+
+
+                                        # Select axes with energies:
+                                        ax = axes[1]
+
+                                        ax.errorbar(VI_merge[argsort], energies[argsort] + ZERO_OFFSETS,
+                                                    # yerr=(VI_split_median - split_min, split_max - VI_split_median),
+                                                    fmt='.',
+                                                    color=colors[agglo_type][non_link][local_attraction], alpha=0.5,
+                                                    )
+                                        ax.fill_between(VI_merge[argsort], energies_perc[:,0][argsort]+ ZERO_OFFSETS,
+                                                        energies_perc[:,1][argsort] + ZERO_OFFSETS,
+                                                        alpha=0.32,
+                                                        facecolor=colors[agglo_type][non_link][local_attraction],
+                                                        label=label)
+
+
+                                        ax.plot(VI_merge[argsort], energies[argsort] + ZERO_OFFSETS, '-',
+                                                color=colors[agglo_type][non_link][local_attraction], alpha=0.8, label=label)
+
+                                        # title = "No long-range connections ($p_{\mathrm{long}}=0$)" if k == 0 else "10\% long-range connections ($p_{\mathrm{long}}=0.1$)"
+                                        # ax.set_title(title)
+                                        # props = dict(boxstyle='round', facecolor='white', alpha=0.5)
+                                        # ax.text(0.02, 0.95, title, transform=ax.transAxes, fontsize=10, fontweight='bold',
+                                        #         verticalalignment='top', bbox=props)
+
+                            # vis_utils.set_log_tics(ax, [-2, 0], [10], format="%.2f", axis='y')
+                            # ////////////////
+                            # ARAND plot
+                            # ////////////////
+
+
+                            ax = axes[0]
+                            ax.set_ylim([0.55, 0.98])
+                            ax.set_xlim([2, 10])
+
+                            # vis_utils.set_log_tics(ax, [-2,0], [10],  format="%.2f", axis='x')
+
+                            # ax.set_xscale("log")
+
+                            # ax.set_xticks(np.arange(0, 1, step=0.1))
+
+                            # Reorder legend:
+                            handles, labels = ax.get_legend_handles_labels()
+                            # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
+                            new_ordering = [4,1,3,2,0] if k == 0 else [3,4,1,0,2]
+
+                            handles = [handles[new_indx] for new_indx in new_ordering]
+                            labels = [labels[new_indx] for new_indx in new_ordering]
+
+                            ax.legend(handles, labels) #loc="lower left"
+                            # if k == 1:
+                            #     ax.set_xlabel(legend_labels[key_x[-1]])
+                            ax.set_ylabel(legend_labels[key_y[-1]])
+
+                            if key_x[-1] in axis_ranges:
+                                ax.set_xlim(axis_ranges[key_x[-1]])
+                            if key_y[-1] in axis_ranges:
+                                ax.set_ylim(axis_ranges[key_y[-1]])
+
+
+
+                            # ////////////////
+                            # ENERGY PLOT:
+                            # ////////////////
+                            ax = axes[1]
+                            ylim = [-100000, 1200000.] if k == 1 else [-100000, 500000.]
+                            # ax.set_ylim(ylim)
+                            ax.set_xlim([2, 10])
+
+
+                            # ax.set_yscale("log")
+                            #
+                            # ax.set_xticks(np.arange(0, 1, step=0.1))
+
+                            # Reorder legend:
+                            handles, labels = ax.get_legend_handles_labels()
+                            # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
+                            new_ordering = [4,3,2,0,1] if k == 0 else [4,2,3,1,0]
+
+                            handles = [handles[new_indx] for new_indx in new_ordering]
+                            labels = [labels[new_indx] for new_indx in new_ordering]
+
+                            ax.legend(handles, labels) #loc="lower left"
+                            ax.set_xlabel(legend_labels[key_x[-1]])
+                            ax.set_ylabel(legend_labels[key_value[-1]])
+
+                            if key_x[-1] in axis_ranges:
+                                ax.set_xlim(axis_ranges[key_x[-1]])
+                            if key_y[-1] in axis_ranges:
+                                ax.set_ylim(axis_ranges[key_y[-1]])
+
+                            # ////////////////
+                            # SAVE PLOT:
+                            # ////////////////
+
+                            plt.subplots_adjust(hspace=0.2)
+
+                            plot_dir = os.path.join(project_directory, exp_name, "plots")
+                            check_dir_and_create(plot_dir)
+
+                            # f.suptitle("Crop of CREMI sample {} (90 x 300 x 300)".format(sample))
+                            f.savefig(os.path.join(plot_dir,
+                                                   'noise_plot_{}_{}.pdf'.format(sample,k)),
+                                      format='pdf')
+
+
+    def make_plots_RAND(self, project_directory):
+        exp_name = self.fixed_kwargs['experiment_name']
+        scores_path = os.path.join(project_directory, exp_name, "scores")
+        results_collected = self.get_plot_data(scores_path, sort_by="noise_factor")
+
+        colors = {'MutexWatershed': {'False': {'True': 'C4', 'False': 'C0'}},
+                  'mean': {'False': {'True': 'C5', 'False': 'C1'},
+                           'True': {'True': 'C6', 'False': 'C8'}},
+                  'sum': {'False': {'False': 'C2'},
+                          'True': {'False': 'C3'}},
+                  }
+        # TODO: changed
         # key_y = ['score_WS', 'vi-merge']
         key_y = ['score_WS', 'adapted-rand']
         key_x = ['noise_factor']
@@ -539,6 +1176,13 @@ class NoiseExperiment(CremiExperiment):
                             continue
 
                         results_collected_crop = results_collected[sample][crop][subcrop]
+
+                        from matplotlib import rc
+                        # rc('font', **{'family': 'serif', 'serif': ['Times']})
+                        ## for Palatino and other serif fonts use:
+                        # rc('font',**{'family':'serif','serif':['Palatino']})
+                        rc('text', usetex=True)
+                        # matplotlib.rcParams['mathtext.fontset'] = 'stix'
 
                         matplotlib.rcParams.update({'font.size': 10})
                         f, axes = plt.subplots(ncols=1, nrows=2, figsize=(9, 7))
@@ -676,14 +1320,15 @@ class NoiseExperiment(CremiExperiment):
                                         # ax.plot(np.linspace(0.0, 0.9, 15), [VI_split[0] for _ in range(15)], '.-',
                                         #         color=colors[agglo_type][non_link][local_attraction], alpha=0.8,label = plot_label_1 + plot_label_2 + plot_label_3)
 
-                                        title = "Without long-range connections" if k == 0 else "With 10% long-range connections"
+                                        title = "No long-range connections ($p_{\mathrm{long}}=0$)" if k == 0 else "10\% long-range connections ($p_{\mathrm{long}}=0.1$)"
                                         # ax.set_title(title)
                                         props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-                                        ax.text(0.6, 0.1, title, transform=ax.transAxes, fontsize=10, fontweight='bold',
+                                        ax.text(0.7, 0.1, title, transform=ax.transAxes, fontsize=10, fontweight='bold',
                                                 verticalalignment='top', bbox=props)
 
                             # vis_utils.set_log_tics(ax, [-2, 0], [10], format="%.2f", axis='y')
 
+                            # TODO: changed
                             ax.set_ylim([0.55, 0.98])
                             ax.set_xlim([2, 10])
 
@@ -761,8 +1406,8 @@ class NoiseExperimentSplit(CremiExperiment):
         })
 
     def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 16
-        nb_iterations = 3
+        nb_threads_pool = 28
+        nb_iterations = 10
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(5, 6), subcrop_iter=range(5, 6),
                                                  init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations,
@@ -947,7 +1592,7 @@ class NoiseExperimentSplit(CremiExperiment):
                                         # runtimes = (1 - runtimes) * 500
                                         # print(runtimes.min(), runtimes.max())
 
-                                        print("Found in {}: {}".format(agglo_type, counter_per_type))
+                                        print("Found in {} - : {} ({})".format(agglo_type, non_link, counter_per_type, k))
 
 
                                         label = plot_label_1 + plot_label_2 + plot_label_3
@@ -1012,11 +1657,11 @@ class NoiseExperimentSplit(CremiExperiment):
                             # Original order: 0:Sum, 1:SumCLC, 2:MWS, 3:Mean, 4:MeanCLC
                             new_ordering = [3, 0, 1, 2, 4] if k == 0 else [3, 0, 1, 2, 4]
 
-                            handles = [handles[new_indx] for new_indx in new_ordering]
-                            labels = [labels[new_indx] for new_indx in new_ordering]
+                            # handles = [handles[new_indx] for new_indx in new_ordering]
+                            # labels = [labels[new_indx] for new_indx in new_ordering]
 
                             loc = 'best' if k == 1 else "lower left"
-                            ax.legend(handles, labels, loc=loc)
+                            # ax.legend(handles, labels, loc=loc)
 
                             if k == 1:
                                 ax.set_xlabel(legend_labels[key_x[-1]])

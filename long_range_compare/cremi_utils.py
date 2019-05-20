@@ -62,6 +62,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     # TODO: simplify/generalize function and move to segmfriends
 
     affinities = affinities.copy()
+    print(sample,agglo,crop_slice,sub_crop_slice)
 
     # # FIXME: delete noise
     # affinities += np.random.normal(scale=1e-5,size=affinities.shape)
@@ -322,7 +323,7 @@ def grow_WS(json_filename, config_dict, project_directory, experiment_name):
         print("Memory error on ", json_filename)
         return
 
-    # TODO: add option to compute scores
+    # TODO: add option to compute scores (but check if test)
     # evals_WS = cremi_score(GT, pred_segm_WS, border_threshold=None, return_all_scores=True)
     # print("Scores achieved ({} - {} - {}): ".format(agglo_type, non_link, noise_factor), evals_WS)
     # new_results.update(
@@ -342,6 +343,30 @@ def grow_WS(json_filename, config_dict, project_directory, experiment_name):
     with open(json_file_path, 'w') as f:
         json.dump(config_dict, f, indent=4, sort_keys=True)
 
+
+def compute_scores(json_filename, config_dict, project_directory, experiment_name):
+    experiment_dir_path = os.path.join(project_directory, experiment_name)
+    export_file = os.path.join(experiment_dir_path, 'out_segms', json_filename.replace('.json', '.h5'))
+    if not os.path.exists(export_file):
+        return
+
+    print(json_filename)
+
+    # Load affinities:
+    print("Loading ", json_filename)
+    _, GT = get_dataset_data("CREMI", config_dict["sample"], config_dict["crop"],
+                                     run_connected_components=False)
+    # TODO: generalize name, but I need to update also the saved scores in the config_file
+    pred_segm = vigra.readHDF5(export_file, "segm_WS")
+
+
+    evals_WS = cremi_score(GT, pred_segm, border_threshold=None, return_all_scores=True)
+    print("Scores achieved ({} - {}): ".format(config_dict["agglo_type"], config_dict["non_link"]), evals_WS)
+    config_dict["score_WS"] = evals_WS
+
+    json_file_path = os.path.join(experiment_dir_path, 'scores', json_filename)
+    with open(json_file_path, 'w') as f:
+        json.dump(config_dict, f, indent=4, sort_keys=True)
 
 def delete_segm(json_filename, config_dict, project_directory, experiment_name):
     if not config_dict["WS_growing"]:

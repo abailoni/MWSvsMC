@@ -44,8 +44,16 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
                 # FIXME: clean mask
                 ignore_mask_border = GT > np.uint64(-10)
                 GT[ignore_mask_border] = 0
+                # FIXME: fix defected slices GT box
+                if sample == "A+":
+                    GT[52] = 1
+                elif sample == "C+":
+                    GT[75] = 1
+                    GT[15] = 1
                 # FIXME: convert to float32 and invert
                 affs = 1. - affs.astype('float32') / 255.
+                print(affs.shape)
+                print(GT.shape)
     elif dataset == 'ISBI':
         # -----------------
         # Load ISBI dataset:
