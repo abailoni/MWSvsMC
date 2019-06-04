@@ -56,7 +56,7 @@ def run_mws(affinities,
 if __name__ == '__main__':
 
     # -----------------
-    # Load data:
+    # Load kwargs:
     # -----------------
     root_path = "/export/home/abailoni/supervised_projs/divisiveMWS"
     # dataset_path = os.path.join(root_path, "cremi-dataset-crop")
@@ -64,11 +64,11 @@ if __name__ == '__main__':
     plots_path = os.path.join("/net/hciserver03/storage/abailoni/greedy_edge_contr/plots")
     save_path = os.path.join(root_path, "outputs")
 
-    # Import data:
-    affinities  = vigra.readHDF5(os.path.join(dataset_path, "isbi_results_MWS/isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"), 'data')
+    # Import kwargs:
+    affinities  = vigra.readHDF5(os.path.join(dataset_path, "isbi_results_MWS/isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"), 'kwargs')
     # raw = io.imread(os.path.join(dataset_path, "train-volume.tif"))
     # raw = np.array(raw)
-    # gt = vigra.readHDF5(os.path.join(dataset_path, "gt_mc3d.h5"), 'data')
+    # gt = vigra.readHDF5(os.path.join(dataset_path, "gt_mc3d.h5"), 'kwargs')
 
     # # If this volume is too big, take a crop of it:
     # crop_slice = (slice(None), slice(None, 1), slice(None, 200), slice(None, 200))
@@ -140,7 +140,7 @@ if __name__ == '__main__':
     # vigra.writeHDF5(segm.astype('uint32'), file_path_segm, 'segm')
 
     file_path = os.path.join('/home/abailoni_local/', "noise.h5")
-    vigra.writeHDF5(affinities, file_path, 'data')
+    vigra.writeHDF5(affinities, file_path, 'kwargs')
 
 
     # Constantin implementation:
