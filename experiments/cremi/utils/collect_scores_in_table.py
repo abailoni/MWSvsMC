@@ -18,8 +18,9 @@ from segmfriends.utils.various import starmap_with_kwargs
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--exp_name', type=str, default="CropTrainSamples")  #DebugExp
-    parser.add_argument('--project_directory', default="projects/agglo_cluster_compare",  type=str)
+    parser.add_argument('--exp_name', type=str, default="FullTrainSamples")  #DebugExp
+    # parser.add_argument('--project_directory', default="projects/agglo_cluster_compare",  type=str)
+    parser.add_argument('--project_directory', default="../quadxeon5_scratch/projects/agglo_cluster_compare",  type=str)
     # TODO: option to pass some other fixed kwargs and overwrite it...?
 
     args = parser.parse_args()

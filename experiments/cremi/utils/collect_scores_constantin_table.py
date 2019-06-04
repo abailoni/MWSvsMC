@@ -12,7 +12,8 @@ from long_range_compare import cremi_utils as cremi_utils
 from long_range_compare import cremi_experiments as cremi_experiments
 
 from segmfriends.utils.various import starmap_with_kwargs
-
+from skunkworks.metrics.cremi_score import cremi_score
+import json
 
 
 if __name__ == '__main__':
@@ -27,21 +28,22 @@ if __name__ == '__main__':
     exp_name = args.exp_name
     proj_dir = os.path.join(get_trendytukan_drive_path(), args.project_directory)
 
-    fixed_kargs = {
-        "experiment_name": exp_name,
-        "project_directory": proj_dir,
-        "configs_dir_path": os.path.join(get_hci_home_path(), "pyCharm_projects/longRangeAgglo/experiments/cremi/configs")
-    }
+    save_dir = os.path.join(get_trendytukan_drive_path(), "projects/agglo_cluster_compare/FullTrainSamples/scores/")
+    with open(os.path.join(save_dir, 'scores_collected.json'), 'r') as f:
+        collected_scores = json.load(f)
 
-    # Select experiment and load data:
-    experiment = cremi_experiments.get_experiment_by_name(exp_name)(fixed_kwargs=fixed_kargs)
-    configs, json_files = experiment.get_list_of_runs( path= os.path.join(fixed_kargs['project_directory'], fixed_kargs['experiment_name'], 'scores'))
+    table = []
+    for postproc_type in collected_scores:
+        arand = []
+        for sample in collected_scores[postproc_type]:
+            arand.append(collected_scores[postproc_type][sample]['cremi-score'])
+        arand = np.array(arand)
+        table.append([postproc_type, arand.mean(), arand.std()])
 
-    from segmfriends.utils.multi_threads import ThreadPoolExecutorStackTraced
-    with ThreadPoolExecutorStackTraced(4) as tp:
-        tasks = [tp.submit(cremi_utils.grow_WS, json_files[i], config, proj_dir, exp_name) for i, config in enumerate(configs)]
-        results = [t.result() for t in tasks]
+    table = np.array(table)
+    table = table[table[:, 1].argsort()]
+    np.savetxt(os.path.join(save_dir, "collected_cremi.csv"), table, delimiter=' & ',
+               fmt='%s',
+               newline=' \\\\\n')
 
-    # for i, config in enumerate(configs):
-    #     cremi_utils.grow_WS(json_files[i], config, proj_dir, exp_name)
 
