@@ -364,16 +364,47 @@ class FullTrainSamples(CremiExperiment):
         sorting_column_idx = 0
 
         keys_to_collect = [
+            ['score_WS', 'cremi-score'],
             ['score_WS','adapted-rand'],
             ['score_WS','vi-merge'],
-            ['energy'],
-            ['runtime']
+            ['score_WS', 'vi-split'],
+            ['runtime'],
+            # ['energy']
         ]
 
+        nb_flt_digits = [
+            3,
+            3,
+            3,
+            3,
+            2,
+            # 2,
+        ]
+        nb_formats = [
+            'f',
+            'f',
+            'f',
+            'f',
+            'e',
+            # 'e',
+        ]
+
+        label_names = {
+            'MutexWatershed' : "Abs Max",
+            'mean': "Average",
+            "max": "Max",
+            "min": "Min",
+            "sum": "Sum",
+        }
+
+
         collected_results = []
-        for agglo_type in ['MutexWatershed', 'mean', 'sum']:
+        for agglo_type in ['MutexWatershed', 'mean', 'sum', 'min', 'max']:
             for non_link in ['False', 'True']:
-                new_table_entrance = [agglo_type, non_link]
+                label = label_names[agglo_type]
+                if eval(non_link):
+                    label += " + CLC"
+                new_table_entrance = [label]
                 collected_configs = []
                 for config, json_file in zip(config_list, json_file_list):
                     if config["agglo_type"] == agglo_type and config["non_link"] == eval(non_link):
@@ -386,12 +417,29 @@ class FullTrainSamples(CremiExperiment):
                     for j, key in enumerate(keys_to_collect):
                         result_matrix[i,j] = return_recursive_key_in_dict(config, key)
 
-                new_table_entrance += list(result_matrix.mean(axis=0)) + list(result_matrix.std(axis=0))
+                means, errors = result_matrix.mean(axis=0), result_matrix.std(axis=0)
+                for j, key in enumerate(keys_to_collect):
+                    # if key[-1] == 'adapted-rand':
+                    #     print("Hola")
+                    #     means[j] = 1. - means[j]
+                    # new_table_entrance.append("{0:.{prec}{type}}".format(means[j],prec=nb_flt_digits[j],
+                    #                                                            type=nb_formats[j]) +
+                    #                           " $\pm$ {0:.{prec}{type}}".format(errors[j],
+                    #                                                                   prec=nb_flt_digits[j],
+                    #                                                                 type=nb_formats[j]))
+                    if key[-1] == 'adapted-rand':
+                        new_table_entrance.append("{0:.{prec}{type}}".format(1.-means[j],prec=nb_flt_digits[j],
+                                                                               type=nb_formats[j]))
+                    else:
+                        new_table_entrance.append("{0:.{prec}{type}}".format(means[j], prec=nb_flt_digits[j],
+                                                                             type=nb_formats[j]))
+
+
                 collected_results.append(new_table_entrance)
 
         collected_results = np.array(collected_results)
-        collected_results = collected_results[collected_results[:,sorting_column_idx+2].argsort()]
-        np.savetxt(os.path.join(scores_path, "collected.csv"), collected_results, delimiter=' & ',
+        collected_results = collected_results[collected_results[:,sorting_column_idx+1].argsort()]
+        np.savetxt(os.path.join(scores_path, "collected_cremi.csv"), collected_results, delimiter=' & ',
                    fmt='%s',
                    newline=' \\\\\n')
 
@@ -811,7 +859,7 @@ class NoiseExperiment(CremiExperiment):
         }
 
         update_rule_names = {
-            'sum': "Sum", 'MutexWatershed': "Absolute Max + Cannot-Link Constr.", 'mean': "Average"
+            'sum': "GASP Sum", 'MutexWatershed': "GASP Abs Max", 'mean': "GASP Average"
         }
 
         axis_ranges = {
@@ -969,7 +1017,7 @@ class NoiseExperiment(CremiExperiment):
 
                                         # Compose plot label:
                                         plot_label_1 = update_rule_names[agglo_type]
-                                        plot_label_2 = " + Cannot-Link Constr." if eval(non_link) else " "
+                                        plot_label_2 = " + Constraints" if eval(non_link) else " "
                                         plot_label_3 = "(local edges attractive)" if eval(local_attraction) else ""
 
                                         if all_keys[-1] == 'runtime':
@@ -1465,7 +1513,7 @@ class NoiseExperimentSplit(CremiExperiment):
         }
 
         update_rule_names = {
-            'sum': "Sum", 'MutexWatershed': "Absolute Max + Cannot-Link Constr.", 'mean': "Mean"
+            'sum': "GASP Sum", 'MutexWatershed': "GASP Abs Max", 'mean': "GASP Average"
         }
 
         axis_ranges = {
@@ -1580,7 +1628,7 @@ class NoiseExperimentSplit(CremiExperiment):
 
                                         # Compose plot label:
                                         plot_label_1 = update_rule_names[agglo_type]
-                                        plot_label_2 = " + Cannot-Link " if eval(non_link) else " "
+                                        plot_label_2 = " + Constraints" if eval(non_link) else " "
                                         plot_label_3 = "(local edges attractive)" if eval(local_attraction) else ""
 
                                         if all_keys[-1] == 'runtime':
@@ -1702,7 +1750,7 @@ class PlotUCM(CremiExperiment):
             "sample": "B",
             "experiment_name": "plotUCM_v2",
             "local_attraction": False,
-            "additional_model_keys": ["thresh000"],
+            # "additional_model_keys": ["thresh000"],
             "compute_scores": True,
             "save_UCM": True,
             "noise_factor": 0.
@@ -1711,7 +1759,7 @@ class PlotUCM(CremiExperiment):
         self.kwargs_to_be_iterated.update({
             # 'agglo': ["GAEC_noLogCosts"],
             # 'agglo': ["MEAN"],
-            'agglo': ["MEAN"],
+            'agglo': ["MutexWatershed"],
             # "noise_factor": np.concatenate((np.linspace(2., 4.5, 5), np.linspace(4.5, 10., 15)))
             # "noise_factor": [8.0]
             # 'sample': ["B"]
@@ -1797,76 +1845,81 @@ class PlotUCM(CremiExperiment):
                 f.savefig(plot_path, format='pdf')
                 first = False
 
-            # PLOT UCM:
+            for zoom in range(2):
+                sub_slc = tuple(parse_data_slice(SUB_SLICE)) if zoom ==0 else tuple(parse_data_slice(":,:,700:1000,:300"))
 
-            ucm_path = os.path.join(project_directory, exp_name, "UCM", config_filename.replace(".json",".h5"))
+                current_raw = raw[sub_slc[1:]]
 
-            UCM = vigra.readHDF5(ucm_path, 'merge_times')[sub_slc]
+                # PLOT UCM:
 
-            segm_path = os.path.join(project_directory, exp_name, "out_segms", config_filename.replace(".json", ".h5"))
+                ucm_path = os.path.join(project_directory, exp_name, "UCM", config_filename.replace(".json",".h5"))
 
-            segm = vigra.readHDF5(segm_path, 'segm_WS')[sub_slc[1:]]
+                UCM = vigra.readHDF5(ucm_path, 'merge_times')[sub_slc]
 
+                segm_path = os.path.join(project_directory, exp_name, "out_segms", config_filename.replace(".json", ".h5"))
 
-
-            mask_1 = UCM == -15
-            nb_nodes = UCM.max()
-            border_mask = UCM == nb_nodes
-            nb_iterations = (UCM * np.logical_not(border_mask)).max()
-            print(nb_iterations)
-
-            plotted_UCM = UCM.copy()
-            plotted_UCM[border_mask] = nb_iterations
-
-            matplotlib.rcParams.update({'font.size': 15})
-            f, axes = plt.subplots(ncols=2, nrows=1, figsize=(14, 7))
-            for a in f.get_axes():
-                a.axis('off')
-
-            ax = axes[0]
-            cax = ax.matshow(raw[SLICE], cmap='gray', alpha=1.)
-            # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
-            cax = ax.matshow(plotted_UCM[1,SLICE], cmap=plt.get_cmap('Reds'),
-                             interpolation='none', alpha=0.6)
-            # ax.matshow(vis_utils.mask_the_mask(np.logical_not(border_mask).astype('int')[1,SLICE], value_to_mask=1.), cmap='gray',
-            #                  interpolation='none', alpha=1.)
-            vis_utils.plot_segm(ax, segm, highlight_boundaries=True, alpha_labels=0., z_slice=SLICE,
-                                alpha_boundary=1.)
-
-            # Plot thick border:
+                segm = vigra.readHDF5(segm_path, 'segm_WS')[sub_slc[1:]]
 
 
-            # f.colorbar(cax, ax=ax, orientation='horizontal', extend='both')
+
+                mask_1 = UCM == -15
+                nb_nodes = UCM.max()
+                border_mask = UCM == nb_nodes
+                nb_iterations = (UCM * np.logical_not(border_mask)).max()
+                print(nb_iterations)
+
+                plotted_UCM = UCM.copy()
+                plotted_UCM[border_mask] = nb_iterations
+
+                matplotlib.rcParams.update({'font.size': 15})
+                f, axes = plt.subplots(ncols=2, nrows=1, figsize=(14, 7))
+                for a in f.get_axes():
+                    a.axis('off')
+
+                ax = axes[1]
+                # cax = ax.matshow(raw[SLICE], cmap='gray', alpha=1.)
+                # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
+                cax = ax.matshow(plotted_UCM[1,SLICE], cmap=plt.get_cmap('Reds'),
+                                 interpolation='none', alpha=0.6)
+                # ax.matshow(vis_utils.mask_the_mask(np.logical_not(border_mask).astype('int')[1,SLICE], value_to_mask=1.), cmap='gray',
+                #                  interpolation='none', alpha=1.)
+                vis_utils.plot_segm(ax, segm, highlight_boundaries=True, alpha_labels=0., z_slice=SLICE,
+                                    alpha_boundary=1.)
+
+                # Plot thick border:
 
 
-            def fmt(x, pos):
-                a, b = '{:.2e}'.format(x).split('e')
-                b = int(b)
-                return r'${} \cdot 10^{{{}}}$'.format(a, b)
-
-            check_dir_and_create(os.path.join(project_directory, exp_name, "plots"))
-            plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", ".pdf"))
-            # cbar = f.colorbar(cax, ax=ax, orientation='vertical', ticks=[0 ,nb_iterations],format='$k = %d$',fraction=0.04, pad=0.04, extend='both')
-            # cbar.solids.set_edgecolor("face")
+                # f.colorbar(cax, ax=ax, orientation='horizontal', extend='both')
 
 
-            # PLOT SEGM:
+                def fmt(x, pos):
+                    a, b = '{:.2e}'.format(x).split('e')
+                    b = int(b)
+                    return r'${} \cdot 10^{{{}}}$'.format(a, b)
+
+                check_dir_and_create(os.path.join(project_directory, exp_name, "plots"))
+                plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", "")  +"_{}.pdf".format(zoom))
+                # cbar = f.colorbar(cax, ax=ax, orientation='vertical', ticks=[0 ,nb_iterations],format='$k = %d$',fraction=0.04, pad=0.04, extend='both')
+                # cbar.solids.set_edgecolor("face")
 
 
-            # matplotlib.rcParams.update({'font.size': 15})
-            # f, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
-            # for a in f.get_axes():
-            #     a.axis('off')
+                # PLOT SEGM:
 
-            ax = axes[1]
 
-            # cax = ax.matshow(raw[0], cmap='gray', alpha=1.)
-            # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
-            vis_utils.plot_segm(ax, segm, background=raw,highlight_boundaries=True, z_slice=SLICE, alpha_labels=0.5, alpha_boundary=1.)
-            # plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", "_segm.pdf"))
-            plt.subplots_adjust(wspace=0, hspace=0)
-            # plt.tight_layout()
-            # f.savefig(plot_path, format='pdf')
+                # matplotlib.rcParams.update({'font.size': 15})
+                # f, ax = plt.subplots(ncols=1, nrows=1, figsize=(7, 7))
+                # for a in f.get_axes():
+                #     a.axis('off')
 
-            f.savefig(plot_path, format='pdf')
+                ax = axes[0]
+
+                # cax = ax.matshow(raw[0], cmap='gray', alpha=1.)
+                # cax = ax.matshow(affs[slc][0, 0], cmap='gray', alpha=0.2)
+                vis_utils.plot_segm(ax, segm, background=current_raw,highlight_boundaries=True, z_slice=SLICE, alpha_labels=0.5, alpha_boundary=1.)
+                # plot_path = os.path.join(project_directory, exp_name, "plots", config_filename.replace(".json", "_segm.pdf"))
+                plt.subplots_adjust(wspace=0, hspace=0)
+                # plt.tight_layout()
+                # f.savefig(plot_path, format='pdf')
+
+                f.savefig(plot_path, format='pdf')
 

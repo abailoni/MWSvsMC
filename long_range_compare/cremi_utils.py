@@ -505,7 +505,7 @@ def add_smart_noise_to_affs(affinities, scale_factor,
 
 
 def add_opensimplex_noise_to_affs(affinities, scale_factor,
-                            mod='add',
+                            mod='merge-biased',
                             target_affs='all',
                             seed=None
                             ):

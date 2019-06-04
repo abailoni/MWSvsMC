@@ -28,6 +28,17 @@ noise_sups:
         used_offsets: [0, 1, 2, 4, 5, 7, 8, 10, 11]
         offset_weights: [1., 1., 1., 1., 1., 0.9, 0.9, 0.8, 0.8]
 
+full_cremi_superpixels:
+  postproc:
+    WSDT_kwargs:
+      boundary_pixels_kwargs:
+        # Noise experiments:
+        boundary_threshold: 0.5
+        used_offsets: [0, 1, 2, 4, 5, 7, 8, 10, 11]
+        offset_weights: [1., 1., 1., 1., 1., 0.9, 0.9, 0.8, 0.8]
+
+
+
 debug_postproc:
   postproc:
     generalized_HC_kwargs:
