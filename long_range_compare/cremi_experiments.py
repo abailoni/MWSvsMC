@@ -139,7 +139,7 @@ class DebugExp(CremiExperiment):
 
         self.kwargs_to_be_iterated.update({
             "noise_factor": [0.],
-            'agglo': ["MEAN"]
+            'agglo': ["SingleLinkage"]
         })
 
     def get_data(self, kwargs_iter=None):

@@ -151,7 +151,7 @@ MutexWatershed:
     generalized_HC_kwargs:
       agglomeration_kwargs:
         extra_aggl_kwargs:
-          update_rule: 'MutexWatershed'
+          update_rule: 'mutex_watershed'
           add_cannot_link_constraints: False
 
 CompleteLinkage:

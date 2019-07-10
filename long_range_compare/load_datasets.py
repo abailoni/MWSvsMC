@@ -97,6 +97,8 @@ def get_GMIS_dataset(type='val', partial=False):
 
     if type == "val":
         root_dir = os.path.join(get_trendytukan_drive_path(), "GMIS_predictions/{}/temp_ram".format(type))
+    elif type == "test":
+        root_dir = os.path.join(get_trendytukan_drive_path(), "../quadxeon5_scratch/projects/GASP_cityscapes/test/temp_ram")
     else:
         root_dir = os.path.join(get_hci_home_path(), "GMIS_predictions/{}/temp_ram".format(type))
     all_file_paths = []

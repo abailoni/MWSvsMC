@@ -192,18 +192,23 @@ class LogRegrModel:
         self.criterion = criterion
         self.optimizer = optimizer
 
-    def get_data(self, image_path):
+    def get_data(self, image_path, available_GT=True):
         # Load data:
         with h5py.File(image_path, 'r') as f:
             strides = f['offset_ranges'][:]
             instance_affs = f['instance_affinities'][:]
             semantic_affs = f['semantic_affinities'][:]
             semantic_argmax = f['semantic_argmax'][:]
-            GT_instances = f['instance_gt'][:]
-        return strides, instance_affs, semantic_affs, semantic_argmax, GT_instances
+            if available_GT:
+                GT_instances = f['instance_gt'][:]
+        if available_GT:
+            return strides, instance_affs, semantic_affs, semantic_argmax, GT_instances
+        else:
+            return strides, instance_affs, semantic_affs, semantic_argmax, None
 
-    def get_training_variables(self, image_path):
-        strides, instance_affs, semantic_affs, semantic_argmax, GT_instances = self.get_data(image_path)
+    def get_training_variables(self, image_path, available_GT=True):
+        strides, instance_affs, semantic_affs, semantic_argmax, GT_instances = self.get_data(image_path,
+                                                                                             available_GT=available_GT)
 
         offsets = get_offsets(strides)
         # -----------------------------------
@@ -211,46 +216,49 @@ class LogRegrModel:
         # -----------------------------------
         affinities, foreground_mask_affs = combine_affs_and_mask(instance_affs, semantic_affs, semantic_argmax, offsets)
 
+        affs_var = Variable(torch.from_numpy(np.rollaxis(affinities.astype('float32'), axis=0, start=4))).to(
+            self.device)
+
         # -----------------------------------
         # Get GT-instance-affinities:
         # -----------------------------------
-        GT_instances = np.expand_dims(GT_instances, axis=0)
-        # Pixels connected to the background should always predict "split":
-        GT_affs = compute_boundary_mask_from_label_image(GT_instances, offsets,
-                                                         channel_affs=0, pad_mode='constant',
-                                                         pad_constant_values=0,
-                                                         background_value=0,
-                                                         return_affinities=True)
+        if available_GT:
+            GT_instances = np.expand_dims(GT_instances, axis=0)
+            # Pixels connected to the background should always predict "split":
+            GT_affs = compute_boundary_mask_from_label_image(GT_instances, offsets,
+                                                             channel_affs=0, pad_mode='constant',
+                                                             pad_constant_values=0,
+                                                             background_value=0,
+                                                             return_affinities=True)
 
-        # Find edge-mask (False if any of the two pixels includes a GT-background label):
-        # we use it to mask the Dice Loss (so we focus the training only on boundaries between instances and not between
-        # pixels connected to the background)
-        foreground_GT_affs = compute_boundary_mask_from_label_image(GT_instances != 0, offsets,
-                                                                    channel_affs=0, pad_mode='constant',
-                                                                    pad_constant_values=False,
-                                                                    background_value=False,
-                                                                    return_affinities=True)
+            # Find edge-mask (False if any of the two pixels includes a GT-background label):
+            # we use it to mask the Dice Loss (so we focus the training only on boundaries between instances and not between
+            # pixels connected to the background)
+            foreground_GT_affs = compute_boundary_mask_from_label_image(GT_instances != 0, offsets,
+                                                                        channel_affs=0, pad_mode='constant',
+                                                                        pad_constant_values=False,
+                                                                        background_value=False,
+                                                                        return_affinities=True)
 
-        # real_boundaries = np.logical_and(np.logical_not(GT_affs), foreground_GT_affs)
-        # real_inner_parts = np.logical_and(GT_affs, foreground_GT_affs)
+            # real_boundaries = np.logical_and(np.logical_not(GT_affs), foreground_GT_affs)
+            # real_inner_parts = np.logical_and(GT_affs, foreground_GT_affs)
 
-        # Pixels connected to the background estimated by GMIS according to the semantic output will be also
-        # automatically zeroed. So it does not make sense to give loss on these affinities:
-        foreground_GT_affs *= foreground_mask_affs
+            # Pixels connected to the background estimated by GMIS according to the semantic output will be also
+            # automatically zeroed. So it does not make sense to give loss on these affinities:
+            foreground_GT_affs *= foreground_mask_affs
 
-        # -----------------------------------
-        # Reshape for logistic regression:
-        # -----------------------------------
 
-        affs_var = Variable(torch.from_numpy(np.rollaxis(affinities.astype('float32'), axis=0, start=4))).to(self.device)
-        GT_var = Variable(torch.from_numpy(np.rollaxis(GT_affs.astype('float32'), axis=0, start=4))).to(self.device)
-        GT_mask_var = Variable(torch.from_numpy(np.rollaxis(foreground_GT_affs.astype('float32'), axis=0, start=4))).to(self.device)
-        is_only_background = foreground_GT_affs.sum() == 0
+            GT_var = Variable(torch.from_numpy(np.rollaxis(GT_affs.astype('float32'), axis=0, start=4))).to(self.device)
+            GT_mask_var = Variable(torch.from_numpy(np.rollaxis(foreground_GT_affs.astype('float32'), axis=0, start=4))).to(self.device)
+            is_only_background = foreground_GT_affs.sum() == 0
 
-        return affs_var, GT_var, GT_mask_var, is_only_background
+            return affs_var, GT_var, GT_mask_var, is_only_background
+
+        else:
+            return affs_var
 
     def infer(self, image_path, take_average=True):
-        affs_var, GT_var, GT_mask_var, is_only_background = self.get_training_variables(image_path)
+        affs_var = self.get_training_variables(image_path, available_GT=False)
 
         outputs = self.model(affs_var)
 
@@ -262,7 +270,7 @@ class LogRegrModel:
 
 
         # Combine with semantic predictions:
-        strides, instance_affs, semantic_affs, semantic_argmax, GT_instances = self.get_data(image_path)
+        strides, instance_affs, semantic_affs, semantic_argmax, _ = self.get_data(image_path, available_GT=False)
         offsets = get_offsets(strides)
         finetuned_inst_affs, _ = combine_affs_and_mask(finetuned_inst_affs, semantic_affs, semantic_argmax, offsets,
                                                             mask_background_affinities=False)
