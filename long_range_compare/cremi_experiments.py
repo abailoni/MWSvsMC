@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from .cremi_utils import CREMI_crop_slices, CREMI_sub_crops_slices
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update, return_recursive_key_in_dict
 from segmfriends.utils.various import check_dir_and_create
+from segmfriends.utils import various as segm_utils
 import segmfriends.vis as vis_utils
 
 def get_experiment_by_name(name):
@@ -184,6 +185,7 @@ class BlockWiseExp(CremiExperiment):
         return kwargs_iter, nb_threads_pool
 
 
+
 class FullTestSamples(CremiExperiment):
     def __init__(self, *super_args, **super_kwargs):
         super(FullTestSamples, self).__init__(*super_args, **super_kwargs)
@@ -196,9 +198,10 @@ class FullTestSamples(CremiExperiment):
             "WS_growing": False,
             "edge_prob": 0.1,
             # "sample": "B",
-            "experiment_name": "FullTestSamples",
+            "experiment_name": "FullTestSamplesEmbed",
             "local_attraction": False,
-            "additional_model_keys": ["debug_postproc", "noise_sups"],
+            "additional_model_keys": ["debug_postproc", "simple_WSDT"],
+            # "additional_model_keys": ["debug_postproc", "embeddings_agglo"],
             "compute_scores": False,
             "save_UCM": False,
             "noise_factor": 0.
@@ -208,8 +211,8 @@ class FullTestSamples(CremiExperiment):
             # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
             # 'agglo': ["MEAN_constr", "GAEC", "greedyFixation"],
             'agglo': ["MEAN"],
-            # 'sample': ["B+"]
-            'sample': ["A+"]
+            'sample': ["A+", "B+", "C+"]
+            # 'sample': ["A+"]
         })
 
     def get_data(self, kwargs_iter=None):
@@ -239,7 +242,7 @@ class FullTestSamples(CremiExperiment):
         from cremi import Annotations, Volume
         from cremi.io import CremiFile
 
-        for sample in ["A+", "C+"]:
+        for sample in ["B+"]:
             results_collected_crop = results_collected[sample][CREMI_crop_slices[sample][0]][CREMI_sub_crops_slices[6]]
 
             for agglo_type in [ty for ty in ['mean'] if ty in results_collected_crop]:
@@ -265,7 +268,8 @@ class FullTestSamples(CremiExperiment):
                             if not os.path.exists(segm_path):
                                 continue
                             print("aligning sample ", filename)
-                            segm = vigra.readHDF5(segm_path, "segm_WS")
+                            key = "segm_WS" if "segm_WS" in segm_utils.getHDF5datasets(segm_path) else "segm"
+                            segm = segm_utils.readHDF5(segm_path, key)
 
                             # Add padding to bring it back in the shape of the padded-aligned volumes:
                             crop = load_datasets.crops_padded_volumes[sample]
@@ -285,9 +289,9 @@ class FullTestSamples(CremiExperiment):
                             file = CremiFile(final_submission_path, "w")
 
                             # Write volumes representing the neuron and synaptic cleft segmentation.
-                            backaligned_segm = vigra.readHDF5(tmp_file, "temp_data")
+                            backaligned_segm = segm_utils.readHDF5(tmp_file, "temp_data")
                             neuron_ids = Volume(backaligned_segm.astype('uint64'), resolution=(40.0, 4.0, 4.0),
-                                                comment="SP-CNN-submission")
+                                                comment="Stacked-CNN-submission")
 
                             file.write_neuron_ids(neuron_ids)
                             file.close()
@@ -302,34 +306,36 @@ class FullTrainSamples(CremiExperiment):
 
         self.fixed_kwargs.update({
             "dataset": "CREMI",
-            "from_superpixels": True,
+            "from_superpixels": False,
             "use_multicut": False,
             "save_segm": True,
             "WS_growing": False,
             "edge_prob": 0.1,
             # "sample": "B",
-            "experiment_name": "FullTrainSamples",
+            "experiment_name": "FullTrainSamples_debug",
             "local_attraction": False,
-            "additional_model_keys": ["debug_postproc"],
+            "additional_model_keys": ["debug_postproc", "simple_WSDT"],
+            # "additional_model_keys": ["debug_postproc", "embeddings_agglo"],
             "compute_scores": True,
             "save_UCM": False,
             "noise_factor": 0.
         })
 
         self.kwargs_to_be_iterated.update({
+            'agglo': ["MEAN"],
             # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
             # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
             # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
-            'agglo': ["SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "SingleLinkage"],
+            # 'agglo': ["SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "SingleLinkage"],
             'sample': ["A", "B", "C"],
             # 'sample': ["B+", "A+", "C+"]
         })
 
     def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 8
+        nb_threads_pool = 1
         nb_iterations = 1
 
-        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(4, 5), subcrop_iter=range(6, 7),
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(5, 6),  # 4, 6
                                                  init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
 
         return kwargs_iter, nb_threads_pool

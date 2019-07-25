@@ -9,7 +9,8 @@ from .data_paths import get_hci_home_path, get_trendytukan_drive_path
 from segmfriends.io.load import parse_offsets
 
 def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_connected_components=True):
-    assert dataset in ['ISBI', 'CREMI'], "Only Cremi and ISBI datasets are supported"
+    # FIXME: get rid of this hack
+    assert dataset in ['ISBI', 'CREMI', 'CREMI-emb'], "Only Cremi and ISBI datasets are supported"
     if crop_slice_str is not None:
         crop_slice = tuple(parse_data_slice(crop_slice_str))
         assert len(
@@ -19,14 +20,16 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
 
     home_path = get_hci_home_path()
 
-    if dataset == 'CREMI':
+    if dataset in ['CREMI', 'CREMI-emb']:
         # -----------------
         # Load CREMI dataset:
         # -----------------
         if sample in ["A", "B", "C"]:
             cremi_path = os.path.join(home_path, "datasets/cremi/SOA_affinities/")
             dt_path = os.path.join(cremi_path, "sample{}_train.h5".format(sample))
+            # FIXME: what is this shit?
             inner_path_GT = "segmentations/groundtruth_fixed_OLD" if sample == "B" else "segmentations/groundtruth_fixed"
+            # inner_path_GT = "segmentations/groundtruth_fixed"
             inner_path_raw = "raw_old" if sample == "B" else "raw"
             inner_path_affs = "predictions/full_affs"
         elif sample in ["A+", "B+", "C+"]:
@@ -34,12 +37,19 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
                              "datasets/CREMI/constantin_affs/test_samples/sample{}_cropped_plus_mask.h5".format(sample))
             inner_path_affs = "affinities"
             inner_path_GT = "volumes/labels/mask"
+            inner_path_raw = 'volumes/raw'
         else:
-            raise NotImplementedError
+            raise ValueError
         with h5py.File(dt_path, 'r') as f:
             GT = f[inner_path_GT][crop_slice[1:]]
-            affs = f[inner_path_affs][crop_slice]
-            # raw = f[inner_path_raw][crop_slice[1:]]
+            if dataset == "CREMI":
+                affs = f[inner_path_affs][crop_slice]
+            elif dataset == 'CREMI-emb':
+                # FIXME: hack
+                with h5py.File(os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/stacked_hour_glass/predictions_sample_{}.h5".format(sample)), 'r') as f_affs:
+                    affs = f_affs['data'][crop_slice].astype(np.float32)
+            else:
+                raise ValueError
             if sample in ["A+", "B+", "C+"]:
                 # FIXME: clean mask
                 ignore_mask_border = GT > np.uint64(-10)
@@ -51,9 +61,24 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
                     GT[75] = 1
                     GT[15] = 1
                 # FIXME: convert to float32 and invert
-                affs = 1. - affs.astype('float32') / 255.
+                if dataset == "CREMI":
+                    affs = 1. - affs.astype('float32') / 255.
                 print(affs.shape)
                 print(GT.shape)
+
+            # ##################
+            assert dataset == "CREMI"
+            raw = f[inner_path_raw][crop_slice[1:]]
+            path = os.path.join(get_hci_home_path(),
+                                "datasets/cremi/tmp_cropped_train_data/compressed/sample_{}.hdf".format(sample))
+            print(path)
+            print("Raw type: ", raw.dtype)
+            vigra.writeHDF5(affs.astype('float16'), path, "affinities", compression='gzip')
+            print("affs wrote")
+            vigra.writeHDF5(GT.astype('uint32'), path, "gt", compression='gzip')
+            vigra.writeHDF5(raw, path, "raw", compression='gzip')
+            # ########################
+
     elif dataset == 'ISBI':
         # -----------------
         # Load ISBI dataset:
@@ -77,11 +102,13 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
 
 
 def get_dataset_offsets(dataset='CREMI'):
-    """I know, it's crap code..."""
+    # TODO: I know, it's crap code..
     if dataset == "CREMI":
         offset_file = 'SOA_offsets.json'
     elif dataset == "ISBI":
         offset_file = 'offsets_MWS.json'
+    elif dataset == 'CREMI-emb':
+        offset_file = 'offsets_embeddings.json'
     offset_file = os.path.join(get_hci_home_path(), 'pyCharm_projects/hc_segmentation/experiments/postprocessing/cremi/offsets/', offset_file)
     return parse_offsets(offset_file)
 

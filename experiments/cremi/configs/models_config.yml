@@ -37,7 +37,20 @@ full_cremi_superpixels:
         used_offsets: [0, 1, 2, 4, 5, 7, 8, 10, 11]
         offset_weights: [1., 1., 1., 1., 1., 0.9, 0.9, 0.8, 0.8]
 
+embeddings_agglo:
+  postproc:
+    WSDT_kwargs:
+      boundary_pixels_kwargs:
+        # Noise experiments:
+        boundary_threshold: 0.5
+        used_offsets: [0, 1, 2, 3, 4, 5, 8, 10]
+        offset_weights: [1., 1., 1., 1., 1., 1., 1., 1.]
 
+
+simple_WSDT:
+  postproc:
+    WSDT_kwargs:
+      intersect_with_boundary_pixels: False
 
 debug_postproc:
   postproc:

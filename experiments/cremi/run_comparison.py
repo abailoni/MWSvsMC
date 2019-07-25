@@ -38,8 +38,11 @@ if __name__ == '__main__':
     print("Agglomarations to run: ", len(kwargs_iter))
 
     # for kwrg in kwargs_iter:
-    #     path = os.path.join(get_hci_home_path(), "datasets/cremi/tmp_cropped_train_data/sample_{}.h5".format(kwrg["sample"]))
+    #     path = os.path.join(get_hci_home_path(), "datasets/cremi/tmp_cropped_train_data/compressed/sample_{}.h5".format(kwrg["sample"]))
     #     print(path)
+    #     from segmfriends.utils.various import readHDF5, writeHDF5
+    #     writeHDF5(kwrg["GT"].astype('uint32'), path, "gt")
+    #     writeHDF5(kwrg["affinities"].astype('float16'), path, "affinities")
     #     vigra.writeHDF5(kwrg["GT"], path, "GT")
     #     print("GT wrote")
     #     vigra.writeHDF5(kwrg["affinities"], path, "affs")

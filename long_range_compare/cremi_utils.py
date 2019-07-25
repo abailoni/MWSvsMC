@@ -270,8 +270,9 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
         check_dir_and_create(os.path.join(experiment_dir_path, 'out_segms'))
         export_file = os.path.join(experiment_dir_path, 'out_segms', '{}_{}_{}_{}.h5'.format(ID, sample, agglo_type, non_link))
         print('{}/out_segms/{}_{}_{}_{}.h5'.format(experiment_name, ID, sample, agglo_type, non_link))
-        vigra.writeHDF5(pred_segm_WS.astype('uint64'), export_file, 'segm_WS')
-        vigra.writeHDF5(pred_segm.astype('uint64'), export_file, 'segm')
+        if post_proc_config.get('thresh_segm_size', 0) != 0 and WS_growing:
+            vigra.writeHDF5(pred_segm_WS.astype('uint32'), export_file, 'segm_WS', compression='gzip')
+        vigra.writeHDF5(pred_segm.astype('uint32'), export_file, 'segm', compression='gzip')
 
     if save_UCM:
         # TODO: avoid saving to disk
