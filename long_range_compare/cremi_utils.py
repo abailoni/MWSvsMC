@@ -678,6 +678,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
 
                             # Fix already long-range edges that will be in the graph:
                             if long_range_prob < 1.0 and long_range_prob > 0.0:
+                                raise DeprecationWarning("BUG! Now the mask has been inverted!")
                                 masks_used_edges_blocks[sample][crop][sub_crop][long_range_prob] = np.random.random(affinities.shape) >= long_range_prob
 
 
