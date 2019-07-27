@@ -9,7 +9,7 @@ import numpy as np
 
 n = 5000    # number of nodes
 k = 100      # number of communities
-eta = 0.25  # sign flipping probability
+eta = 0.35  # sign flipping probability
 p = 0.1   # edge probability
 
 
@@ -21,6 +21,7 @@ from long_range_compare.SSBM_utils import from_adj_matrix_to_edge_list, from_edg
 
 A_signed = A_p-A_n
 uv_ids, signed_edge_weights = from_adj_matrix_to_edge_list(A_signed)
+
 
 # adj_dense = from_edge_list_to_adj_matrix(uv_ids, edge_weights)
 #
@@ -101,10 +102,12 @@ L_assign = c.spectral_cluster_laplacian(k = k, normalisation='sym')
 print("L_sym took", time.time()-tick)
 
 tick = time.time()
-SPONGE_assign = c.geproblem_laplacian(k = k, normalisation='additive')
+# SPONGE_assign = c.geproblem_laplacian(k = k, normalisation='additive')
+SPONGE_assign = c.SPONGE(k = k)
 print("SPONGE took", time.time()-tick)
 tick = time.time()
-SPONGEsym_assign = c.geproblem_laplacian(k = k, normalisation='multiplicative')
+# SPONGEsym_assign = c.geproblem_laplacian(k = k, normalisation='multiplicative')
+SPONGEsym_assign = c.SPONGE_sym(k = k)
 print("SPONGEsym took", time.time()-tick)
 # compute the recovery score of the algorithms against the SSBM ground truth
 
