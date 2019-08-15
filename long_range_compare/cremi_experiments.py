@@ -6,6 +6,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 from .cremi_utils import CREMI_crop_slices, CREMI_sub_crops_slices
+from .data_paths import get_hci_home_path, get_trendytukan_drive_path
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update, return_recursive_key_in_dict
 from segmfriends.utils.various import check_dir_and_create
 from segmfriends.utils import various as segm_utils
@@ -143,8 +144,7 @@ class DebugExp(CremiExperiment):
             'agglo': ["SingleLinkage"]
         })
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 1
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 1
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(5, 6),
@@ -175,8 +175,7 @@ class BlockWiseExp(CremiExperiment):
             'agglo': ["MEAN"]
         })
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 1
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 1
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(5, 6),
@@ -215,8 +214,7 @@ class FullTestSamples(CremiExperiment):
             # 'sample': ["A+"]
         })
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 1
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 1
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(6, 7),
@@ -299,6 +297,170 @@ class FullTestSamples(CremiExperiment):
                             os.remove(tmp_file)
 
 
+class PixelEmbeddingTrainSamples(CremiExperiment):
+    def __init__(self, *super_args, **super_kwargs):
+        super(PixelEmbeddingTrainSamples, self).__init__(*super_args, **super_kwargs)
+
+        self.fixed_kwargs.update({
+            "dataset": "CREMI",
+            "from_superpixels": True,
+            "use_multicut": False,
+            "save_segm": True,
+            "WS_growing": True,
+            "edge_prob": 1.,
+            # "sample": "A",
+            # "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/affs_from_IoU_shape399/"),
+            # "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/multiscale_affs/"),
+            "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/affs_from_patch_embeddings/"),
+            # "experiment_name": "FullTrain_dice",
+            "experiment_name": "FullTrain_emb",
+            # "experiment_name": "FullTrain_IoU",
+            "local_attraction": False,
+            "additional_model_keys": ["debug_postproc", "simple_WSDT", "invertAffs", "setWSDTLocalOffsets"],
+            # "additional_model_keys": ["debug_postproc", "boundaryPixels_IoU", "invertAffs", "setWSDTLocalOffsets"],
+            # "additional_model_keys": ["debug_postproc", "simple_WSDT"],
+            # "additional_model_keys": ["debug_postproc", "boundaryPixels_IoU"],
+            "compute_scores": True,
+            "offset_file": os.path.join(get_hci_home_path(),"pyCharm_projects/uppsala_hackathon/experiments/cremi/offsets/offsets_dice.json"),
+            # "offset_file": os.path.join(get_hci_home_path(),"pyCharm_projects/uppsala_hackathon/experiments/cremi/offsets/offsets_affs_from_emb.json"),
+            # "offset_file": os.path.join(get_hci_home_path(), "pyCharm_projects/uppsala_hackathon/experiments/cremi/offsets/offsets_affs_from_IoU.json"),
+            "save_UCM": False,
+            "noise_factor": 0.
+        })
+
+        self.kwargs_to_be_iterated.update({
+            # 'agglo': ["MEAN"],
+            'agglo': ["MutexWatershed"],
+            # "edge_prob": [0., 1.],
+            # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
+            # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
+            # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
+            # 'agglo': ["SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "SingleLinkage"],
+            'sample': ["A", "C", "B"],
+            # 'sample': ["A"],
+            # 'sample': ["B+", "A+", "C+"]
+        })
+
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
+        nb_iterations = 1
+
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(4, 5), subcrop_iter=range(6, 7),  # 4, 6
+                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+        # kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(5, 6),  # 4, 6
+        #                                          init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+
+
+        return kwargs_iter, nb_threads_pool
+
+    def collect_scores(self, project_directory):
+        exp_name = self.fixed_kwargs['experiment_name']
+        scores_path = os.path.join(project_directory, exp_name, "scores")
+        config_list, json_file_list = self.get_list_of_runs(scores_path)
+
+        def assign_color(value, good_thresh, bad_thresh, nb_flt, best="lowest"):
+            if best == "lowest":
+                if value < good_thresh:
+                    return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value > good_thresh and value < bad_thresh:
+                    return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value > bad_thresh:
+                    return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            elif best == "highest":
+                if value > good_thresh:
+                    return '{{\color{{ForestGreen}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value < good_thresh and value > bad_thresh:
+                    return '{{\color{{Orange}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+                if value < bad_thresh:
+                    return '{{\color{{Red}} {num:.{prec}f} }}'.format(prec=nb_flt, num=value)
+            else:
+                raise ValueError
+
+        collected_results = []
+        energies, ARAND = [], []
+        SEL_PROB = 0.1
+
+        sorting_column_idx = 0
+
+        keys_to_collect = [
+            ['score_WS', 'cremi-score'],
+            ['score_WS','adapted-rand'],
+            ['score_WS','vi-merge'],
+            ['score_WS', 'vi-split'],
+            ['runtime'],
+            # ['energy']
+        ]
+
+        nb_flt_digits = [
+            3,
+            3,
+            3,
+            3,
+            2,
+            # 2,
+        ]
+        nb_formats = [
+            'f',
+            'f',
+            'f',
+            'f',
+            'e',
+            # 'e',
+        ]
+
+        label_names = {
+            'MutexWatershed' : "Abs Max",
+            'mean': "Average",
+            "max": "Max",
+            "min": "Min",
+            "sum": "Sum",
+        }
+
+
+        collected_results = []
+        for agglo_type in ['MutexWatershed', 'mean', 'sum', 'min', 'max']:
+            for non_link in ['False', 'True']:
+                label = label_names[agglo_type]
+                if eval(non_link):
+                    label += " + CLC"
+                new_table_entrance = [label]
+                collected_configs = []
+                for config, json_file in zip(config_list, json_file_list):
+                    if config["agglo_type"] == agglo_type and config["non_link"] == eval(non_link):
+                        collected_configs.append(config)
+                if len(collected_configs) == 0:
+                    continue
+
+                result_matrix = np.empty((len(collected_configs), len(keys_to_collect)) )
+                for i, config in enumerate(collected_configs):
+                    for j, key in enumerate(keys_to_collect):
+                        result_matrix[i,j] = return_recursive_key_in_dict(config, key)
+
+                means, errors = result_matrix.mean(axis=0), result_matrix.std(axis=0)
+                for j, key in enumerate(keys_to_collect):
+                    # if key[-1] == 'adapted-rand':
+                    #     print("Hola")
+                    #     means[j] = 1. - means[j]
+                    # new_table_entrance.append("{0:.{prec}{type}}".format(means[j],prec=nb_flt_digits[j],
+                    #                                                            type=nb_formats[j]) +
+                    #                           " $\pm$ {0:.{prec}{type}}".format(errors[j],
+                    #                                                                   prec=nb_flt_digits[j],
+                    #                                                                 type=nb_formats[j]))
+                    if key[-1] == 'adapted-rand':
+                        new_table_entrance.append("{0:.{prec}{type}}".format(1.-means[j],prec=nb_flt_digits[j],
+                                                                               type=nb_formats[j]))
+                    else:
+                        new_table_entrance.append("{0:.{prec}{type}}".format(means[j], prec=nb_flt_digits[j],
+                                                                             type=nb_formats[j]))
+
+
+                collected_results.append(new_table_entrance)
+
+        collected_results = np.array(collected_results)
+        collected_results = collected_results[collected_results[:,sorting_column_idx+1].argsort()]
+        np.savetxt(os.path.join(scores_path, "collected_cremi.csv"), collected_results, delimiter=' & ',
+                   fmt='%s',
+                   newline=' \\\\\n')
+
 
 class FullTrainSamples(CremiExperiment):
     def __init__(self, *super_args, **super_kwargs):
@@ -312,6 +474,7 @@ class FullTrainSamples(CremiExperiment):
             "WS_growing": False,
             "edge_prob": 0.1,
             # "sample": "B",
+            # "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/affs_from_IoU_shape399/"),
             "experiment_name": "FullTrainSamples_debug",
             "local_attraction": False,
             "additional_model_keys": ["debug_postproc", "simple_WSDT"],
@@ -331,11 +494,11 @@ class FullTrainSamples(CremiExperiment):
             # 'sample': ["B+", "A+", "C+"]
         })
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 1
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 1
 
-        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(5, 6),  # 4, 6
+        # FIXME:
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(4, 5), subcrop_iter=range(6, 7),  # 4, 6
                                                  init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
 
         return kwargs_iter, nb_threads_pool
@@ -722,8 +885,7 @@ class CropTrainSamples(CremiExperiment):
         })
     #     TODO: crops! agglo, from_superpixels, edge_prob, check and merge_edge, WS_grow
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 1
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 1
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(4, 5), #4
@@ -814,8 +976,7 @@ class NoiseExperiment(CremiExperiment):
             # 'sample': ["B+", "A+", "C+"]
         })
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 25
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 6
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(5, 6), subcrop_iter=range(5, 6),
@@ -1459,8 +1620,7 @@ class NoiseExperimentSplit(CremiExperiment):
             # 'sample': ["B+", "A+", "C+"]
         })
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 28
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 10
 
         kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(5, 6), subcrop_iter=range(5, 6),
@@ -1772,8 +1932,7 @@ class PlotUCM(CremiExperiment):
             # 'sample': ["B+", "A+", "C+"]
         })
 
-    def get_data(self, kwargs_iter=None):
-        nb_threads_pool = 1
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 1
 
         # ":,13:17,110:560,270:720", ":,:, :, :"

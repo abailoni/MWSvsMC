@@ -52,6 +52,16 @@ simple_WSDT:
     WSDT_kwargs:
       intersect_with_boundary_pixels: False
 
+boundaryPixels_IoU:
+  postproc:
+    WSDT_kwargs:
+      boundary_pixels_kwargs:
+        # Noise experiments:
+        boundary_threshold: 0.5
+        used_offsets: [0, 1, 2, 3, 4]
+        offset_weights: [1., 1., 1., 1., 1.]
+
+
 debug_postproc:
   postproc:
     generalized_HC_kwargs:
@@ -375,6 +385,17 @@ gen_HC_max:
 notInvertAffs:
   postproc:
     invert_affinities: False
+
+invertAffs:
+  postproc:
+    invert_affinities: True
+
+setWSDTLocalOffsets:
+  postproc:
+    prob_map_kwargs:
+      offset_weights: [1.0, 1.0]
+      used_offsets: [0, 1]
+
 
 zeroInit:
   postproc:

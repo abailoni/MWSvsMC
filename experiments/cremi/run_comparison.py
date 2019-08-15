@@ -19,12 +19,14 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp_name', type=str, default="FullTestSamples")  #DebugExp
-    parser.add_argument('--project_directory', default="projects/agglo_cluster_compare",  type=str)
+    parser.add_argument('--project_directory', default="projects/pixel_embeddings",  type=str)
+    parser.add_argument('--nb_threads_pool', default=1, type=int)
     # TODO: option to pass some other fixed kwargs and overwrite it...?
 
     args = parser.parse_args()
 
     exp_name = args.exp_name
+    nb_threads_pool = args.nb_threads_pool
 
     fixed_kargs = {
         "experiment_name": exp_name,
@@ -34,7 +36,7 @@ if __name__ == '__main__':
 
     # Select experiment and load data:
     experiment = cremi_experiments.get_experiment_by_name(exp_name)(fixed_kwargs=fixed_kargs)
-    kwargs_iter, nb_threads_pool = experiment.get_data()
+    kwargs_iter, nb_threads_pool = experiment.get_data(nb_threads_pool=nb_threads_pool)
     print("Agglomarations to run: ", len(kwargs_iter))
 
     # for kwrg in kwargs_iter:
@@ -47,6 +49,7 @@ if __name__ == '__main__':
     #     print("GT wrote")
     #     vigra.writeHDF5(kwrg["affinities"], path, "affs")
     #     print("affs wrote")
+
 
     #
     # Start pool:

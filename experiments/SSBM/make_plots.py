@@ -19,7 +19,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp_name', type=str, default="SSBMExperiment")  #DebugExp
-    parser.add_argument('--project_directory', default="projects/SSBM_compare",  type=str)
+    parser.add_argument('--project_directory', default="projects/spectral_compare",  type=str)
     # parser.add_argument('--project_directory', default="projects/agglo_cluster_compare/quadxeon5_results",  type=str)
     # parser.add_argument('--project_directory', default="../quadxeon5_scratch/projects/agglo_cluster_compare",  type=str)
 

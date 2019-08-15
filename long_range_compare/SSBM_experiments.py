@@ -60,8 +60,11 @@ def run_method_on_graph(method_type, true_assign,
                         graph=None, A_p=None, A_n=None,
                         experiment_name=None,
                         eta=None,
+                        gauss_sigma=None,
                         project_directory=None,
                         save_output_segm=False,
+                        affinities=None,
+                        offsets=None,
                         output_shape=None):
     # Run clustering:
     tick = time.time()
@@ -123,6 +126,7 @@ def run_method_on_graph(method_type, true_assign,
     new_results["p"] = p
     new_results["n"] = n
     new_results["eta"] = eta
+    new_results["guass_sigma"] = gauss_sigma
     new_results["spectral_method_name"] = spectral_method_name
     new_results["linkage_criteria"] = linkage_criteria
     new_results["add_cannot_link_constraints"] = add_cannot_link_constraints
@@ -144,19 +148,33 @@ def run_method_on_graph(method_type, true_assign,
     new_results["nb_clusters"] = int(nb_clusters)
     new_results["biggest_clusters"] = [int(size) for size in biggest_clusters]
 
-
-    with open(result_file, 'w') as f:
-        json.dump(new_results, f, indent=4, sort_keys=True)
-
-
     # Save output:
     if save_output_segm:
         assert output_shape is not None
+        assert affinities is not None
+        assert offsets is not None
         check_dir_and_create(os.path.join(experiment_dir_path, 'out_segms'))
         export_file = os.path.join(experiment_dir_path, 'out_segms',
                                    '{}_{}_{}.h5'.format(method_type, spectral_method_name, linkage_criteria))
         from segmfriends.utils.various import writeHDF5
         writeHDF5(node_labels.reshape(output_shape), export_file, 'segm', compression='gzip')
+
+        # Delete small segments:
+        from GASP.segmentation.watershed import SizeThreshAndGrowWithWS
+        hmap_kwargs = {
+            "offset_weights": [1.0, 1.0],
+            "used_offsets": [1, 2]
+        }
+        size_grower = SizeThreshAndGrowWithWS(20, offsets, hmap_kwargs=hmap_kwargs)
+        segm_WS = size_grower(affinities, node_labels.reshape(output_shape))
+        writeHDF5(segm_WS, export_file, 'segm_WS', compression='gzip')
+
+        RAND_score_WS = adjusted_rand_score(segm_WS.flatten(), true_assign)
+        new_results["RAND_score_WS"] = RAND_score_WS
+
+    with open(result_file, 'w') as f:
+        json.dump(new_results, f, indent=4, sort_keys=True)
+
 
 
 def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
@@ -166,7 +184,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
     iter_collected = {
     }
 
-    KEYS_TO_ITER = ['method_type', 'eta', 'spectral_method_name', 'linkage_criteria', 'add_cannot_link_constraints', 'p']
+    KEYS_TO_ITER = ['method_type', 'eta', 'spectral_method_name', 'linkage_criteria', 'add_cannot_link_constraints', 'p', 'guassian_sigma']
     for key in KEYS_TO_ITER:
         if key in fixed_kwargs:
             iter_collected[key] = [fixed_kwargs[key]]
@@ -186,94 +204,98 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
             k = fixed_kwargs.get("k")
             for p in iter_collected['p']:
                 for eta in iter_collected['eta']:
-                    print("Creating SSBM model...")
-                    (A_p, A_n), true_assign = signetMdl.SSBM(n=n, k=k, pin=p, etain=eta, values='gaussian')
+                    for gauss_sigma in iter_collected['guassian_sigma']:
+                        print("Creating SSBM model...")
+                        (A_p, A_n), true_assign = signetMdl.SSBM(n=n, k=k, pin=p, etain=eta, values='gaussian', guassian_sigma=gauss_sigma)
 
-                    A_signed = A_p - A_n
-                    uv_ids, signed_edge_weights = from_adj_matrix_to_edge_list(A_signed)
+                        A_signed = A_p - A_n
+                        uv_ids, signed_edge_weights = from_adj_matrix_to_edge_list(A_signed)
 
-                    print("Building nifty graph...")
-                    graph = UndirectedGraph(n)
-                    graph.insertEdges(uv_ids)
-                    nb_edges = graph.numberOfEdges
-                    assert graph.numberOfEdges == uv_ids.shape[0]
+                        print("Building nifty graph...")
+                        graph = UndirectedGraph(n)
+                        graph.insertEdges(uv_ids)
+                        nb_edges = graph.numberOfEdges
+                        assert graph.numberOfEdges == uv_ids.shape[0]
 
-                    # Test connected components:
-                    from nifty.graph import components
-                    components = components(graph)
-                    components.build()
-                    print("Nb. connected components in graph:", np.unique(components.componentLabels()).shape)
+                        # Test connected components:
+                        from nifty.graph import components
+                        components = components(graph)
+                        components.build()
+                        print("Nb. connected components in graph:", np.unique(components.componentLabels()).shape)
 
-                    # Symmetrize matrices:
-                    grid = np.indices((n, n))
-                    matrix_mask = grid[0] > grid[1]
-                    A_p = matrix_mask * A_p.toarray()
-                    A_n = matrix_mask * A_n.toarray()
-                    A_p = A_p + np.transpose(A_p)
-                    A_n = A_n + np.transpose(A_n)
-                    A_p = sparse.csr_matrix(A_p)
-                    A_n = sparse.csr_matrix(A_n)
+                        # Symmetrize matrices:
+                        grid = np.indices((n, n))
+                        matrix_mask = grid[0] > grid[1]
+                        A_p = matrix_mask * A_p.toarray()
+                        A_n = matrix_mask * A_n.toarray()
+                        A_p = A_p + np.transpose(A_p)
+                        A_n = A_n + np.transpose(A_n)
+                        A_p = sparse.csr_matrix(A_p)
+                        A_n = sparse.csr_matrix(A_n)
 
-                    # Start collecting kwargs:
-                    for method_type in iter_collected["method_type"]:
-                        if method_type == "spectral":
-                            for spectral_method_name in iter_collected["spectral_method_name"]:
-                                new_kwargs = {}
-                                new_kwargs.update(fixed_kwargs)
-
-                                iterated_kwargs = {
-                                    'method_type': method_type,
-                                    'true_assign': true_assign,
-                                    'spectral_method_name': spectral_method_name,
-                                    'A_p': A_p,
-                                    'A_n': A_n,
-                                    'n': n,
-                                    'eta': eta,
-                                    'p': p,
-                                    'k': k,
-                                }
-                                new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
-                                kwargs_iter.append(new_kwargs)
-                        elif method_type == "GASP":
-                            for linkage in iter_collected["linkage_criteria"]:
-                                for CNC in iter_collected["add_cannot_link_constraints"]:
+                        # Start collecting kwargs:
+                        for method_type in iter_collected["method_type"]:
+                            if method_type == "spectral":
+                                for spectral_method_name in iter_collected["spectral_method_name"]:
                                     new_kwargs = {}
                                     new_kwargs.update(fixed_kwargs)
 
                                     iterated_kwargs = {
                                         'method_type': method_type,
                                         'true_assign': true_assign,
-                                        'linkage_criteria': linkage,
-                                        'add_cannot_link_constraints': CNC,
-                                        'signed_edge_weights': signed_edge_weights,
-                                        'graph': graph,
-                                        'eta': eta,
+                                        'spectral_method_name': spectral_method_name,
+                                        'A_p': A_p,
+                                        'A_n': A_n,
                                         'n': n,
+                                        'eta': eta,
+                                        'gauss_sigma': gauss_sigma,
                                         'p': p,
                                         'k': k,
-
                                     }
                                     new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
                                     kwargs_iter.append(new_kwargs)
-                        elif method_type == "multicut":
-                            new_kwargs = {}
-                            new_kwargs.update(fixed_kwargs)
+                            elif method_type == "GASP":
+                                for linkage in iter_collected["linkage_criteria"]:
+                                    for CNC in iter_collected["add_cannot_link_constraints"]:
+                                        new_kwargs = {}
+                                        new_kwargs.update(fixed_kwargs)
 
-                            iterated_kwargs = {
-                                'method_type': method_type,
-                                'true_assign': true_assign,
-                                'signed_edge_weights': signed_edge_weights,
-                                'graph': graph,
-                                'eta': eta,
-                                'n': n,
-                                'p': p,
-                                'k': k,
+                                        iterated_kwargs = {
+                                            'method_type': method_type,
+                                            'true_assign': true_assign,
+                                            'linkage_criteria': linkage,
+                                            'add_cannot_link_constraints': CNC,
+                                            'signed_edge_weights': signed_edge_weights,
+                                            'graph': graph,
+                                            'eta': eta,
+                                            'gauss_sigma': gauss_sigma,
+                                            'n': n,
+                                            'p': p,
+                                            'k': k,
 
-                            }
-                            new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
-                            kwargs_iter.append(new_kwargs)
-                        else:
-                            raise NotImplementedError
+                                        }
+                                        new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
+                                        kwargs_iter.append(new_kwargs)
+                            elif method_type == "multicut":
+                                new_kwargs = {}
+                                new_kwargs.update(fixed_kwargs)
+
+                                iterated_kwargs = {
+                                    'method_type': method_type,
+                                    'true_assign': true_assign,
+                                    'signed_edge_weights': signed_edge_weights,
+                                    'graph': graph,
+                                    'eta': eta,
+                                    'gauss_sigma': gauss_sigma,
+                                    'n': n,
+                                    'p': p,
+                                    'k': k,
+
+                                }
+                                new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
+                                kwargs_iter.append(new_kwargs)
+                            else:
+                                raise NotImplementedError
         else:
             raise NotImplementedError
 
@@ -359,7 +381,9 @@ def get_kwargs_iter_CREMI(fixed_kwargs, kwargs_to_be_iterated,
                             'p': None,
                             'k': k,
                             'save_output_segm': True,
-                            'output_shape': GT.shape
+                            'output_shape': GT.shape,
+                            'affinities': affs,
+                            'offsets': get_dataset_offsets("CREMI")
                         }
                         new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
                         kwargs_iter.append(new_kwargs)
@@ -381,7 +405,9 @@ def get_kwargs_iter_CREMI(fixed_kwargs, kwargs_to_be_iterated,
                                 'p': None,
                                 'k': k,
                                 'save_output_segm': True,
-                                'output_shape': GT.shape
+                                'output_shape': GT.shape,
+                                'affinities': affs,
+                                'offsets': get_dataset_offsets("CREMI")
 
                             }
                             new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
@@ -400,7 +426,9 @@ def get_kwargs_iter_CREMI(fixed_kwargs, kwargs_to_be_iterated,
                         'p': None,
                         'k': k,
                         'save_output_segm': True,
-                        'output_shape': GT.shape
+                        'output_shape': GT.shape,
+                        'affinities': affs,
+                        'offsets': get_dataset_offsets("CREMI")
 
                     }
                     new_kwargs.update({k: v for k, v in iterated_kwargs.items() if k not in new_kwargs})
@@ -435,16 +463,19 @@ class SSBMExperiment(object):
         self.fixed_kwargs.update({
             "n": 10000, # 10000
             "k": 100, # 100
-            # "eta": 0.35,
+            "eta": 0.,
             "dataset": "SSBM",
-            "experiment_name": "first_experiment",
+            "experiment_name": "gaussian_noise",
+            # "experiment_name": "first_experiment",
         })
 
         self.kwargs_to_be_iterated.update({
             'spectral_method_name': ["SPONGE", "BNC", "L-sym", "SPONGE-sym"],
             'linkage_criteria': ["mean", "abs_max", "sum"],
-            # 'linkage_criteria': ["mean"],
-            "eta": np.linspace(0.01, 0.4, num=40),
+            'guassian_sigma': np.linspace(1., 4., num=8),
+            # 'linkage_criteria': ["sum"],
+            # "eta": np.linspace(0., 0.01, num=2),
+            # "eta": np.linspace(0.01, 0.4, num=40),
             "method_type": ["GASP", "spectral"],
             # "method_type": ["GASP"],
             'add_cannot_link_constraints': [False],
@@ -514,56 +545,121 @@ class SSBMExperiment(object):
 
         key_x = ['eta']
         key_y = ['RAND_score']
-        key_value = ['runtime']
+        key_value = ['RAND_score']
 
         legend_axes = {
-            'eta': "Eta",
-            'RAND_score': "RAND",
+            'eta': "Edge noise: sign flip probability $\eta$",
+            'RAND_score': "Rand-Score",
             'runtime': "runtime",
         }
 
         # Find best values for every crop:
-        matplotlib.rcParams.update({'font.size': 9})
+        from matplotlib import rc
+        # rc('font', **{'family': 'serif', 'serif': ['Times']})
+        ## for Palatino and other serif fonts use:
+        # rc('font',**{'family':'serif','serif':['Palatino']})
+        rc('text', usetex=True)
+        # matplotlib.rcParams['mathtext.fontset'] = 'stix'
+
+        matplotlib.rcParams.update({'font.size': 12})
         ncols, nrows = 1, 1
-        f, all_ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(7, 7))
+        f, all_ax = plt.subplots(ncols=ncols, nrows=nrows, figsize=(7, 3.5))
         ax = all_ax
 
         label_names = []
 
+        all_method_descriptors = ["sumFalse", "SPONGE-sym", "meanFalse", "abs_maxFalse", "SPONGE", "L-sym", "BNC"]
+
+        colors = {'SPONGE-sym': 'C7',
+                  'sumFalse': 'C2',
+                  'sumTrue': 'C3',
+                  'meanFalse': 'C1',
+                  'abs_maxFalse': 'C0',
+                  'L-sym': 'C4',
+                  'SPONGE': 'C5',
+                  'BNC': 'C6',
+                  'kernighanLin': 'C2',
+              }
+
+        methods = {'SPONGE-sym': 'spectral',
+                  'sumFalse': 'GASP',
+                   'sumTrue': 'GASP',
+                  'meanFalse': 'GASP',
+                  'abs_maxFalse': 'GASP',
+                  'L-sym': 'spectral',
+                  'SPONGE': 'spectral',
+                  'BNC': 'spectral',
+                    'kernighanLin': 'multicut'
+                  }
+
+        labels = {'SPONGE-sym': 'SPONGE$_{sym}$ [4]',
+                  'sumFalse': 'GASP Sum',
+                  'sumTrue': 'GASP Sum + CLC',
+                  'meanFalse': 'GASP Average',
+                  'abs_maxFalse': 'GASP Abs Max',
+                  'L-sym': '$L_{sym}$ [6]',
+                  'SPONGE': 'SPONGE [4]',
+                  'BNC': 'BNC [2]',
+                  'kernighanLin': 'MC',
+              }
+
+
+
+
         type_counter = 0
-        for method in [ty for ty in ['GASP', 'spectral', 'multicut'] if ty in results_collected]:
-            for method_descriptor in results_collected[method]:
-                label_names.append(method_descriptor)
-                # color_list.append(colors[agglo_type][non_link][local_attraction])
-                sub_dict = results_collected[method][method_descriptor]
-                values = []
-                etas = []
+        for method_descriptor in all_method_descriptors:
+            method = methods[method_descriptor]
+            if method_descriptor not in results_collected[method]:
+                continue
+            sub_dict = results_collected[method][method_descriptor]
+            values = []
+            etas = []
+            nb_iterations = []
 
-                for eta in sub_dict:
-                    multiple_values = []
-                    for ID in sub_dict[eta]:
-                        data_dict = sub_dict[eta][ID]
-                        multiple_values.append(return_recursive_key_in_dict(data_dict, key_value))
-                    if len(multiple_values) == 0:
-                        continue
-                    multiple_values = np.array(multiple_values)
-                    mean = multiple_values.mean(axis=0)
-                    values.append(mean)
-                    etas.append(eta)
+            print(method_descriptor)
+            for eta in sub_dict:
+                multiple_values = []
+                for ID in sub_dict[eta]:
+                    data_dict = sub_dict[eta][ID]
+                    multiple_values.append(return_recursive_key_in_dict(data_dict, key_value))
+                if len(multiple_values) == 0:
+                    continue
+                multiple_values = np.array(multiple_values)
+                median = np.median(multiple_values)
+                p_25 = np.percentile(multiple_values, 25)
+                p_75 = np.percentile(multiple_values, 75)
+                values.append([median, p_25, p_75])
+                etas.append(eta)
+                nb_iterations.append(multiple_values.shape[0])
 
-                # Sort keys:
-                etas = np.array(etas)
-                values = np.array(values)
-                argsort = np.argsort(etas)
+            print(np.array(nb_iterations).mean())
+            # Sort keys:
+            etas = np.array(etas)
+            values = np.array(values)
+            argsort = np.argsort(etas, axis=0)
 
-                ax.plot(etas[argsort], values[argsort], label=label_names[-1])
-                type_counter += 0
+            ax.fill_between(etas[argsort], values[:,1][argsort],
+                            values[:,2][argsort],
+                            alpha=0.32,
+                            facecolor=colors[method_descriptor],
+                            label=labels[method_descriptor])
+
+            ax.errorbar(etas, values[:,0],
+                        # yerr=(VI_split_median - split_min, split_max - VI_split_median),
+                        fmt='.',
+                        color=colors[method_descriptor], alpha=0.5,
+                        )
+
+            ax.plot(etas[argsort], values[:,0][argsort], '-',
+                    color=colors[method_descriptor], alpha=0.8)
+            type_counter += 0
 
         ax.set_xlabel(legend_axes[key_x[-1]])
         ax.set_ylabel(legend_axes[key_y[-1]])
         lgnd = ax.legend()
 
-        # ax.set_yscale("log", nonposy='clip')
+        ax.set_yscale("log", nonposy='clip')
+        f.subplots_adjust(bottom=0.2)
 
         # for i in range(10):
         #     try:
@@ -576,7 +672,9 @@ class SSBMExperiment(object):
         # if sample == "B":
         #     ax.set_ylim([0.080, 0.090])
         # else:
-        ax.autoscale(enable=True, axis='both')
+        # ax.autoscale(enable=True, axis='both')
+        ax.set_ylim([2e-4, 1. ])
+
 
         # if all_keys[-1] == 'runtime':
         #     ax.set_yscale("log", nonposy='clip')
@@ -588,8 +686,40 @@ class SSBMExperiment(object):
 
         # f.suptitle("Crop of CREMI sample {} (90 x 300 x 300)".format(sample))
         f.savefig(os.path.join(plot_dir,
-                               'method_comparison.pdf'),
+                               'SSBM_experiments.pdf'),
                   format='pdf')
+
+class SSBMExperimentOriginal(SSBMExperiment):
+    def __init__(self, fixed_kwargs=None):
+        if fixed_kwargs is None:
+            self.fixed_kwargs = {}
+        else:
+            assert isinstance(fixed_kwargs, dict)
+            self.fixed_kwargs = fixed_kwargs
+
+        self.kwargs_to_be_iterated = {}
+
+        self.fixed_kwargs.update({
+            "n": 10000, # 10000
+            "k": 100, # 100
+            "eta": 0.,
+            "dataset": "SSBM",
+            # "experiment_name": "gaussian_noise",
+            "experiment_name": "first_experiment",
+        })
+
+        self.kwargs_to_be_iterated.update({
+            'spectral_method_name': ["SPONGE", "BNC", "L-sym", "SPONGE-sym"],
+            'linkage_criteria': ["mean", "abs_max", "sum"],
+            'guassian_sigma': np.linspace(1., 4., num=8),
+            # 'linkage_criteria': ["sum"],
+            # "eta": np.linspace(0., 0.01, num=2),
+            # "eta": np.linspace(0.01, 0.4, num=40),
+            "method_type": ["GASP", "spectral"],
+            # "method_type": ["GASP"],
+            'add_cannot_link_constraints': [False],
+            'p': [0.1],
+        })
 
 
 
@@ -612,7 +742,7 @@ class CremiExperiment(SSBMExperiment):
             # "k": 100, # 100
             # "eta": 0.35,
             "dataset": "CREMI",
-            "experiment_name": "first_cremi_experiment",
+            "experiment_name": "cremi_experiment_1_diag",
         })
 
 
@@ -633,3 +763,73 @@ class CremiExperiment(SSBMExperiment):
         kwargs_iter = get_kwargs_iter_CREMI(self.fixed_kwargs, self.kwargs_to_be_iterated, init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
 
         return kwargs_iter, nb_threads_pool
+
+
+    def collect_scores(self, project_directory):
+        exp_name = self.fixed_kwargs['experiment_name']
+        scores_path = os.path.join(project_directory, exp_name, "scores")
+        config_list, json_file_list = self.get_list_of_runs(scores_path)
+
+        all_method_descriptors = ["sumFalse", "SPONGE-sym", "meanFalse", "SPONGE", "L-sym", "BNC", "abs_maxFalse"]
+
+        methods = {'SPONGE-sym': 'spectral',
+                  'sumFalse': 'GASP',
+                  'meanFalse': 'GASP',
+                  'abs_maxFalse': 'GASP',
+                  'L-sym': 'spectral',
+                  'SPONGE': 'spectral',
+                  'BNC': 'spectral',
+                  }
+
+        labels = {'SPONGE-sym': 'SPONGE$_{sym}$ [5]',
+                  'sumFalse': 'GASP Sum',
+                  'meanFalse': 'GASP Average',
+                  'abs_maxFalse': 'GASP Abs Max',
+                  'L-sym': '$L_{sym}$ [7]',
+                  'SPONGE': 'SPONGE [5]',
+                  'BNC': 'BNC [3]',
+              }
+
+
+        collected_results = []
+        energies, ARAND = [], []
+        for config, json_file in zip(config_list, json_file_list):
+            if config["method_type"] == "spectral":
+                method_descriptor = config["spectral_method_name"]
+            elif config["method_type"] == "GASP":
+                method_descriptor = config["linkage_criteria"]+str(config["add_cannot_link_constraints"])
+            else:
+                raise ValueError
+            if config["k"] != 11:
+                continue
+
+            new_table_entrance = [labels[method_descriptor], '{:.4f}'.format(config["RAND_score"])]
+            if "RAND_score_WS" in config:
+                new_table_entrance.append('{:.4f}'.format(config["RAND_score_WS"]))
+            else:
+                new_table_entrance.append('')
+            ARAND.append(config["RAND_score"])
+            collected_results.append(new_table_entrance)
+        collected_results = np.array(collected_results)
+        collected_results = collected_results[np.array(ARAND).argsort()[::-1]]
+        np.savetxt(os.path.join(scores_path, "collected_scores.csv"), collected_results, delimiter=' & ', fmt='%s',
+                   newline=' \\\\\n')
+
+    def get_list_of_runs(self, path):
+        IDs, configs, json_files = [], [], []
+        for item in os.listdir(path):
+            if os.path.isfile(os.path.join(path, item)):
+                filename = item
+                if not filename.endswith(".json") or filename.startswith("."):
+                    continue
+                # outputs = filename.split("_")
+                # if len(filename.split("_")) != 4:
+                #     continue
+                # ID, sample, agglo_type, _ = filename.split("_")
+                result_file = os.path.join(path, filename)
+                json_files.append(filename)
+                with open(result_file, 'rb') as f:
+                    file_dict = json.load(f)
+                configs.append(file_dict)
+                # IDs.append(ID)
+        return configs, json_files

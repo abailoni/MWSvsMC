@@ -13,6 +13,7 @@ from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSu
 from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
 from segmfriends.algorithms.blockwise import BlockWise
 from segmfriends.algorithms import get_segmentation_pipeline
+from segmfriends.io.load import parse_offsets
 
 # FIXME: get rid of this skunkwork dependence!
 from skunkworks.metrics.cremi_score import cremi_score
@@ -52,6 +53,7 @@ def get_postproc_config(agglo,
 
 def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, agglo,
                      experiment_name, project_directory, configs_dir_path,
+                        offset_file=None,
                      edge_prob=1.0,
                      local_attraction=False,
                      save_UCM=False,
@@ -68,7 +70,9 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     # affinities += np.random.normal(scale=1e-5,size=affinities.shape)
     # affinities = np.clip(affinities, 0., 1.)
 
-    offsets = get_dataset_offsets(dataset)
+    offsets = get_dataset_offsets(dataset) if offset_file is None else parse_offsets(offset_file)
+
+    # affinities = np.concatenate((affinities[[10]], affinities[:10], affinities[11:]))
 
     post_proc_config = get_postproc_config(agglo,
                      configs_dir_path,
@@ -604,6 +608,9 @@ def get_block_data_lists():
 def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
                     crop_iter, subcrop_iter,
                     init_kwargs_iter=None, nb_iterations=1, noise_mod='split-biased'):
+    from copy import deepcopy
+    fixed_kwargs = deepcopy(fixed_kwargs)
+    affs_path = fixed_kwargs.pop("affs_path", "SOA")
     kwargs_iter = init_kwargs_iter if isinstance(init_kwargs_iter, list) else []
 
     iter_collected = {
@@ -635,6 +642,7 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
 
                     # FIXME: actually cremi is the only supported dataset at the moment (mainly for the crops...)
                     affinities, GT = get_dataset_data(fixed_kwargs['dataset'], sample, CREMI_crop_slices[sample][crop],
+                                                      affs_path=affs_path,
                                                       run_connected_components=False)
                     # temp_file = os.path.join(get_hci_home_path(), 'affs_plus_smart_noise.h5')
 
@@ -678,8 +686,8 @@ def get_kwargs_iter(fixed_kwargs, kwargs_to_be_iterated,
 
                             # Fix already long-range edges that will be in the graph:
                             if long_range_prob < 1.0 and long_range_prob > 0.0:
-                                raise DeprecationWarning("BUG! Now the mask has been inverted!")
-                                masks_used_edges_blocks[sample][crop][sub_crop][long_range_prob] = np.random.random(affinities.shape) >= long_range_prob
+                                # raise DeprecationWarning("BUG! Now the mask has been inverted!")
+                                masks_used_edges_blocks[sample][crop][sub_crop][long_range_prob] = np.random.random(affinities.shape) < long_range_prob
 
 
             # ----------------------------------------------------------------------

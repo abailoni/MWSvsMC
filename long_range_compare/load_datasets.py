@@ -8,7 +8,8 @@ from segmfriends.utils import yaml2dict, parse_data_slice
 from .data_paths import get_hci_home_path, get_trendytukan_drive_path
 from segmfriends.io.load import parse_offsets
 
-def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_connected_components=True):
+def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_connected_components=True,
+                     affs_path="SOA"):
     # FIXME: get rid of this hack
     assert dataset in ['ISBI', 'CREMI', 'CREMI-emb'], "Only Cremi and ISBI datasets are supported"
     if crop_slice_str is not None:
@@ -42,14 +43,14 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
             raise ValueError
         with h5py.File(dt_path, 'r') as f:
             GT = f[inner_path_GT][crop_slice[1:]]
-            if dataset == "CREMI":
+            if affs_path == "SOA":
                 affs = f[inner_path_affs][crop_slice]
-            elif dataset == 'CREMI-emb':
-                # FIXME: hack
-                with h5py.File(os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/stacked_hour_glass/predictions_sample_{}.h5".format(sample)), 'r') as f_affs:
-                    affs = f_affs['data'][crop_slice].astype(np.float32)
+                # FIXME: convert to float32 and invert
+                affs = 1. - affs.astype('float32') / 255.
             else:
-                raise ValueError
+                # FIXME: generalize the path/sample...
+                with h5py.File(os.path.join(affs_path, "predictions_sample_{}.h5".format(sample)), 'r') as f_affs:
+                    affs = f_affs['data'][crop_slice].astype(np.float32)
             if sample in ["A+", "B+", "C+"]:
                 # FIXME: clean mask
                 ignore_mask_border = GT > np.uint64(-10)
@@ -60,24 +61,19 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
                 elif sample == "C+":
                     GT[75] = 1
                     GT[15] = 1
-                # FIXME: convert to float32 and invert
-                if dataset == "CREMI":
-                    affs = 1. - affs.astype('float32') / 255.
-                print(affs.shape)
-                print(GT.shape)
 
-            # ##################
-            assert dataset == "CREMI"
-            raw = f[inner_path_raw][crop_slice[1:]]
-            path = os.path.join(get_hci_home_path(),
-                                "datasets/cremi/tmp_cropped_train_data/compressed/sample_{}.hdf".format(sample))
-            print(path)
-            print("Raw type: ", raw.dtype)
-            vigra.writeHDF5(affs.astype('float16'), path, "affinities", compression='gzip')
-            print("affs wrote")
-            vigra.writeHDF5(GT.astype('uint32'), path, "gt", compression='gzip')
-            vigra.writeHDF5(raw, path, "raw", compression='gzip')
-            # ########################
+            # # ##################
+            # assert dataset == "CREMI"
+            # raw = f[inner_path_raw][crop_slice[1:]]
+            # path = os.path.join(get_hci_home_path(),
+            #                     "datasets/cremi/tmp_cropped_train_data/compressed/sample_{}.hdf".format(sample))
+            # print(path)
+            # print("Raw type: ", raw.dtype)
+            # vigra.writeHDF5(affs.astype('float16'), path, "affinities", compression='gzip')
+            # print("affs wrote")
+            # vigra.writeHDF5(GT.astype('uint32'), path, "gt", compression='gzip')
+            # vigra.writeHDF5(raw, path, "raw", compression='gzip')
+            # # ########################
 
     elif dataset == 'ISBI':
         # -----------------
