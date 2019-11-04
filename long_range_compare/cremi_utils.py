@@ -7,6 +7,7 @@ import time
 import json
 import h5py
 
+
 from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dict_update
 from segmfriends.utils import yaml2dict, parse_data_slice, check_dir_and_create
 from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
@@ -121,9 +122,14 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
     tick = time.time()
 
     if from_superpixels:
-        pred_segm, out_dict = post_proc_solver(affinities, GT != 0)
+        outputs  = post_proc_solver(affinities, GT != 0)
     else:
-        pred_segm, out_dict = post_proc_solver(affinities)
+        outputs = post_proc_solver(affinities)
+    if isinstance(outputs, tuple):
+        pred_segm, out_dict = outputs
+    else:
+        pred_segm = outputs
+        out_dict = {'MC_energy': np.array([0]), 'runtime': 0.}
     MC_energy = out_dict['MC_energy']
     if save_UCM:
         UCM, mergeTimes = out_dict['UCM'], out_dict['mergeTimes']
@@ -261,9 +267,10 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
         evals = cremi_score(GT, pred_segm, border_threshold=None, return_all_scores=True)
         evals_WS = cremi_score(GT, pred_segm_WS, border_threshold=None, return_all_scores=True)
         print("Scores achieved ({} - {} - {}): ".format(agglo_type,non_link, noise_factor), evals_WS)
-        new_results.update({'energy': np.asscalar(MC_energy), 'score': evals, 'score_WS': evals_WS, 'runtime': out_dict['runtime']})
+        new_results.update({'energy': MC_energy.item(), 'score': evals, 'score_WS': evals_WS, 'runtime': out_dict['runtime']})
 
     check_dir_and_create(os.path.join(experiment_dir_path, 'scores'))
+    agglo_type.replace("_", "")
     result_file = os.path.join(experiment_dir_path, 'scores', '{}_{}_{}_{}.json'.format(ID,sample,agglo_type,non_link))
     with open(result_file, 'w') as f:
         json.dump(new_results, f, indent=4, sort_keys=True)

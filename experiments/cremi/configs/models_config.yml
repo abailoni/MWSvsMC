@@ -511,6 +511,13 @@ crop_train:
       B: ':, :, 100:1330, 665:1750'
       C: ':, :, 150:-150, 150:-150'
 
+crop_padded_affs:
+  postproc:
+    data_slice:
+      A: ':, 6:20, 120:-120, 120:-120'
+      B: ':, 6:20, 120:-120, 120:-120'
+      C: ':, 6:20, 120:-120, 120:-120'
+
 
 DTWS:
   postproc:
@@ -906,6 +913,16 @@ thresh097:
         extra_aggl_kwargs:
           threshold: 0.97
 
+thresh1:
+  postproc:
+    MWS_kwargs:
+      bias: 1.
+    multicut_kwargs:
+      beta: 1.
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          threshold: 1.
 
 
 ### Test defected slices:

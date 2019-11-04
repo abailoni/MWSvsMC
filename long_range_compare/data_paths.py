@@ -7,9 +7,11 @@ def get_hci_home_path():
     if hostname == 'trendytukan' and username == 'abailoni':
         return '/net/hcihome/storage/abailoni/'
     elif hostname == 'trendytukan' and username == 'abailoni_local':
-        return '/home/abailoni_local/hci_home/'
+        # return '/home/abailoni_local/hci_home/'
+        return '/home/abailoni_local/ialgpu1_local_home/'
     elif hostname == 'ialgpu01' or hostname == 'birdperson' or hostname == 'sirherny':
-        return '/home/abailoni/hci_home/'
+        return '/home/abailoni/local_copy_home/'
+        # return '/home/abailoni/hci_home/'
     elif hostname == 'quadxeon5':
         return '/srv/scratch/abailoni'
     else:

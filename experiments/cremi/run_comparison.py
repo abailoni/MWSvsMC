@@ -6,17 +6,18 @@ import os
 import argparse
 from multiprocessing.pool import ThreadPool
 from itertools import repeat
-
+#
 from long_range_compare.data_paths import get_hci_home_path, get_trendytukan_drive_path
 from long_range_compare import cremi_utils as cremi_utils
 from long_range_compare import cremi_experiments as cremi_experiments
-
+#
 from segmfriends.utils.various import starmap_with_kwargs
 
 
 
 if __name__ == '__main__':
 
+    print("CIao!!")
     parser = argparse.ArgumentParser()
     parser.add_argument('--exp_name', type=str, default="FullTestSamples")  #DebugExp
     parser.add_argument('--project_directory', default="projects/pixel_embeddings",  type=str)
