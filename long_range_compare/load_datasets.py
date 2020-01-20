@@ -79,15 +79,24 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
         # -----------------
         # Load ISBI dataset:
         # -----------------
-        isbi_path = os.path.join(home_path, "abailoni/datasets/ISBI/")
+        isbi_dir_path = os.path.join(get_trendytukan_drive_path(), "datasets/ISBI/MWS_affs/")
+        GT = None
+        if sample == "test_ISBI":
+            filename = "isbi_test_offsetsV4_3d_meantda_damws2deval_final.h5"
+            GT = vigra.readHDF5(os.path.join(isbi_dir_path, "mst_isbi_test_offsetsV4_3d_meantda_damws2deval_final.h5"), 'data')
+            # GT = np.transpose(GT, (2, 1, 0))[crop_slice[1:]]
+        elif sample == "train_ISBI":
+            filename = "isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"
+            GT = vigra.readHDF5(os.path.join(isbi_dir_path, "../gt_cleaned.h5"), 'data')
+            GT = np.transpose(GT, (2, 1, 0))[crop_slice[1:]]
+        else:
+            raise NotImplementedError()
         affs = 1 - vigra.readHDF5(
-            os.path.join(isbi_path, "isbi_results_MWS/isbi_train_offsetsV4_3d_meantda_damws2deval_final.h5"), 'data')[
+            os.path.join(isbi_dir_path, filename), 'data')[
             crop_slice]
         # raw = io.imread(os.path.join(isbi_path, "train-volume.tif"))
         # raw = np.array(raw)[crop_slice[1:]]
         # gt_3D = vigra.readHDF5(os.path.join(isbi_path, "gt_mc3d.h5"), 'data')
-        GT = vigra.readHDF5(os.path.join(isbi_path, "gt_cleaned.h5"), 'data')
-        GT = np.transpose(GT, (2, 1, 0))[crop_slice[1:]]
     else:
         raise NotImplementedError
 
@@ -178,6 +187,8 @@ CREMI_crop_slices = {
     "A+": [":, :, :, :"],
     "B+": [":, :, :, :"],
     "C+": [":, :, :, :"],
+    "train_ISBI": [":, :, :, :"],
+    "test_ISBI": [":, :, :, :"],
 }
 
 CREMI_sub_crops_slices = [":,2:, 100:600, 100:600",

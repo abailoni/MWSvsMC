@@ -465,8 +465,8 @@ class SSBMExperiment(object):
             "k": 100, # 100
             "eta": 0.,
             "dataset": "SSBM",
-            "experiment_name": "gaussian_noise",
-            # "experiment_name": "first_experiment",
+            # "experiment_name": "gaussian_noise",
+            "experiment_name": "first_experiment",
         })
 
         self.kwargs_to_be_iterated.update({
@@ -592,14 +592,15 @@ class SSBMExperiment(object):
                     'kernighanLin': 'multicut'
                   }
 
-        labels = {'SPONGE-sym': 'SPONGE$_{sym}$ [4]',
+        labels = {'SPONGE-sym': 'SPONGE$_{sym}$',
+
                   'sumFalse': 'GASP Sum',
                   'sumTrue': 'GASP Sum + CLC',
                   'meanFalse': 'GASP Average',
                   'abs_maxFalse': 'GASP Abs Max',
-                  'L-sym': '$L_{sym}$ [6]',
-                  'SPONGE': 'SPONGE [4]',
-                  'BNC': 'BNC [2]',
+                  'L-sym': '$L_{sym}$',
+                  'SPONGE': 'SPONGE',
+                  'BNC': 'BNC ',
                   'kernighanLin': 'MC',
               }
 
@@ -638,7 +639,7 @@ class SSBMExperiment(object):
             values = np.array(values)
             argsort = np.argsort(etas, axis=0)
 
-            ax.fill_between(etas[argsort], values[:,1][argsort],
+            ax.fill_between(etas[argsort] , values[:,1][argsort],
                             values[:,2][argsort],
                             alpha=0.32,
                             facecolor=colors[method_descriptor],

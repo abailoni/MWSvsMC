@@ -285,6 +285,16 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
             vigra.writeHDF5(pred_segm_WS.astype('uint32'), export_file, 'segm_WS', compression='gzip')
         vigra.writeHDF5(pred_segm.astype('uint32'), export_file, 'segm', compression='gzip')
 
+        if dataset == "ISBI":
+            # Compute submission tiff file (boundary: 0, inner: 1)
+            from skimage.segmentation import find_boundaries
+            from skimage import io
+            binary_boundaries = np.empty_like(pred_segm_WS, dtype="bool")
+            for z in range(pred_segm_WS.shape[0]):
+                binary_boundaries[z] = find_boundaries(pred_segm_WS[z], connectivity=1, mode='thick', background=0)
+            binary_boundaries = np.logical_not(binary_boundaries)
+            io.imsave(export_file.replace(".h5", ".tif"), binary_boundaries.astype('float32'))
+
     if save_UCM:
         # TODO: avoid saving to disk
         UCM_folder = os.path.join(experiment_dir_path, 'UCM')

@@ -297,6 +297,66 @@ class FullTestSamples(CremiExperiment):
                             os.remove(tmp_file)
 
 
+class ISBIExperiment(CremiExperiment):
+    def __init__(self, *super_args, **super_kwargs):
+        super(ISBIExperiment, self).__init__(*super_args, **super_kwargs)
+
+        self.fixed_kwargs.update({
+            "dataset": "ISBI",
+            "from_superpixels": False,
+            "compute_scores": True,
+            "use_multicut": False,
+            "save_segm": True,
+            "WS_growing": True,
+            "edge_prob": 1.,
+            # "sample": "A",
+            # "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/128emb_patch_3_38_38_fullPatch/"),
+            # "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/multiscale_affs/"),
+            # "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/affs_from_patch_embeddings/"),
+            # "experiment_name": "FullTrain_dice",
+            # "experiment_name": "FullTrain_emb",
+            "experiment_name": "ISBI_test_allLongRange",
+            # "experiment_name": "FullTrain_SOA",
+            "local_attraction": False,
+            # "additional_model_keys": ["debug_postproc", "invertAffs"],
+            # "additional_model_keys": ["debug_postproc", "simple_WSDT", "invertAffs", "setWSDTLocalOffsets"],
+            # "additional_model_keys": ["debug_postproc", "boundaryPixels_IoU", "invertAffs", "setWSDTLocalOffsets"],
+            "additional_model_keys": ["debug_postproc"],
+            # "additional_model_keys": ["debug_postproc", "stride10", "crop_padded_affs"],
+            # "additional_model_keys": ["debug_postproc", "boundaryPixels_IoU"],
+            # "compute_scores": True,
+            "offset_file": os.path.join(get_hci_home_path(), "pyCharm_projects/uppsala_hackathon/experiments/cremi/offsets/offsets_MWS.json"),
+            "save_UCM": False,
+            "noise_factor": 0.
+        })
+
+        self.kwargs_to_be_iterated.update({
+            'agglo': ["MEAN_constr", "GAEC"],
+            # 'agglo': ["MutexWatershed"],
+            # "edge_prob": [0., 1.],
+            # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
+            # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
+            # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
+            # 'agglo': ["SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "SingleLinkage"],
+            # 'sample': ["A", "C", "B"],
+            'sample': ["test_ISBI"],
+            # 'sample': ["B+", "A+", "C+"]
+        })
+
+    def get_data(self, kwargs_iter=None, nb_threads_pool=1):
+        nb_iterations = 1
+
+        # kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(4, 5), subcrop_iter=range(6, 7),  # 4, 6
+        #                                          init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=[-1], subcrop_iter=range(6, 7),  # 4, 6
+                                                 init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
+
+
+
+        return kwargs_iter, nb_threads_pool
+
+
+
 class PixelEmbeddingTrainSamples(CremiExperiment):
     def __init__(self, *super_args, **super_kwargs):
         super(PixelEmbeddingTrainSamples, self).__init__(*super_args, **super_kwargs)
