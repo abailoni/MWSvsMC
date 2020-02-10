@@ -15,7 +15,7 @@ def get_hci_home_path():
     elif hostname == 'quadxeon5':
         return '/srv/scratch/abailoni'
     else:
-        return '/net/hcihome/storage/abailoni/'
+        return '/net/hcihome/storage/abailoni/local_home/'
 
 def get_trendytukan_drive_path():
     username = getpass.getuser()

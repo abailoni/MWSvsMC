@@ -46,7 +46,7 @@ def get_dataset_data(dataset='CREMI', sample=None, crop_slice_str=None, run_conn
             if affs_path == "SOA":
                 affs = f[inner_path_affs][crop_slice]
                 # FIXME: convert to float32 and invert
-                affs = 1. - affs.astype('float32') / 255.
+                # affs = 1. - affs.astype('float32') / 255.
             else:
                 # FIXME: generalize the path/sample...
                 with h5py.File(os.path.join(affs_path, "predictions_sample_{}.h5".format(sample)), 'r') as f_affs:

@@ -500,7 +500,7 @@ class FullTrainSamples(CremiExperiment):
 
         self.fixed_kwargs.update({
             "dataset": "CREMI",
-            "from_superpixels": False,
+            "from_superpixels": True,
             "use_multicut": False,
             "save_segm": True,
             "WS_growing": False,
@@ -509,7 +509,7 @@ class FullTrainSamples(CremiExperiment):
             # "affs_path": os.path.join(get_trendytukan_drive_path(),"projects/pixel_embeddings/affs_from_IoU_shape399/"),
             "experiment_name": "FullTrainSamples_debug",
             "local_attraction": False,
-            "additional_model_keys": ["debug_postproc", "simple_WSDT"],
+            "additional_model_keys": ["debug_postproc"],
             # "additional_model_keys": ["debug_postproc", "embeddings_agglo"],
             "compute_scores": True,
             "save_UCM": False,
@@ -517,12 +517,13 @@ class FullTrainSamples(CremiExperiment):
         })
 
         self.kwargs_to_be_iterated.update({
-            'agglo': ["MEAN"],
+            'agglo': ["MutexWatershed"],
             # 'agglo': ["MEAN", "MutexWatershed", "MEAN_constr", "GAEC", "greedyFixation"],
             # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
             # 'agglo': [ "greedyFixation", "MEAN", "MutexWatershed", "MEAN_constr", "GAEC"],
             # 'agglo': ["SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "SingleLinkage"],
-            'sample': ["A", "B", "C"],
+            # 'sample': ["A", "B", "C"],
+            'sample': ["B"],
             # 'sample': ["B+", "A+", "C+"]
         })
 
