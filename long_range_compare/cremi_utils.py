@@ -12,7 +12,6 @@ from segmfriends.utils.config_utils import adapt_configs_to_model, recursive_dic
 from segmfriends.utils import yaml2dict, parse_data_slice, check_dir_and_create
 from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSuperpixels
 from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
-from segmfriends.algorithms.blockwise import BlockWise
 from segmfriends.algorithms import get_segmentation_pipeline
 from segmfriends.io.load import parse_offsets
 
@@ -63,6 +62,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
                    mask_used_edges=None):
     # TODO: add experiment folder!
     # TODO: simplify/generalize function and move to segmfriends
+    raise DeprecationWarning("First remove reference to BlockWise")
 
     affinities = affinities.copy()
     print(sample,agglo,crop_slice,sub_crop_slice)
