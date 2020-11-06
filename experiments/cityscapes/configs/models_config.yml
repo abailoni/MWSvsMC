@@ -67,6 +67,20 @@ GAEC:
 #        verbose: True
 #        printNth: 1000000
 
+GAEC_balanced:
+  parent_model: ['gen_HC']
+  postproc:
+    generalized_HC_kwargs:
+      agglomeration_kwargs:
+        extra_aggl_kwargs:
+          linkage_criteria: 'sum'
+          size_regularizer: 1.
+          add_cannot_link_constraints: False
+          use_log_costs: True
+#      extra_runAggl_kwargs:
+#        verbose: True
+#        printNth: 1000000
+
 
 GAEC_noLogCosts:
   parent_model: ['gen_HC']

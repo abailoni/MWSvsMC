@@ -14,6 +14,7 @@ from segmfriends.algorithms.agglo import GreedyEdgeContractionAgglomeraterFromSu
 from segmfriends.algorithms.WS.WS_growing import SizeThreshAndGrowWithWS
 from segmfriends.algorithms import get_segmentation_pipeline
 from segmfriends.io.load import parse_offsets
+from segmfriends.algorithms.blockwise import BlockWise
 
 # FIXME: get rid of this skunkwork dependence!
 from skunkworks.metrics.cremi_score import cremi_score
@@ -62,7 +63,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
                    mask_used_edges=None):
     # TODO: add experiment folder!
     # TODO: simplify/generalize function and move to segmfriends
-    raise DeprecationWarning("First remove reference to BlockWise")
+    # raise DeprecationWarning("First remove reference to BlockWise")
 
     affinities = affinities.copy()
     print(sample,agglo,crop_slice,sub_crop_slice)
@@ -206,7 +207,7 @@ def run_clustering(affinities, GT, dataset, sample, crop_slice, sub_crop_slice, 
         agglo_type = "max"
         non_link = False
     else:
-        agglo_type = extra_agglo['update_rule']
+        agglo_type = extra_agglo['linkage_criteria']
         non_link = extra_agglo['add_cannot_link_constraints']
 
 

@@ -894,9 +894,9 @@ class CropTrainSamples(CremiExperiment):
             "use_multicut": False,
             "save_segm": True,
             "WS_growing": True,
-            "edge_prob": 0.201,
+            "edge_prob": 0.101,
             # "sample": "B",
-            "experiment_name": "cropTrainSamples",
+            "experiment_name": "cropTrainSamples_balancedGAEC_2",
             "local_attraction": False,
             # "additional_model_keys": ["debug_postproc"],
             "compute_scores": True,
@@ -907,12 +907,14 @@ class CropTrainSamples(CremiExperiment):
 
         self.kwargs_to_be_iterated.update({
             'agglo': [
-                      "MEAN",  "greedyFixation_noLogCosts", "MEAN_constr", "GAEC", "greedyFixation", "GAEC_noLogCosts", "SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "MEAN_constr_logCosts",
-                      "MEAN_logCosts", "SingleLinkage", "MutexWatershed"],
+                       "MEAN", "GAEC",
+                # "greedyFixation", "GAEC_noLogCosts", "SingleLinkagePlusCLC", "CompleteLinkage", "CompleteLinkagePlusCLC", "MEAN_constr_logCosts",
+                #       "MEAN_logCosts", "SingleLinkage", "MutexWatershed"
+            ],
             # 'agglo': ["GAEC"],
             # 'agglo': ["MutexWatershed"],
             # 'agglo': ["MEAN_constr", "GAEC", "greedyFixation"],
-            'sample': ["C"],
+            'sample': ["B"],
             # "additional_model_keys": ["debug_postproc"],
             # 'sample': ["B+", "A+", "C+"]
         })
@@ -921,7 +923,7 @@ class CropTrainSamples(CremiExperiment):
     def get_data(self, kwargs_iter=None, nb_threads_pool=1):
         nb_iterations = 1
 
-        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(4, 5), #4
+        kwargs_iter = self.get_cremi_kwargs_iter(crop_iter=range(0, 1), subcrop_iter=range(4, 5), #4, 8
                                                  init_kwargs_iter=kwargs_iter, nb_iterations=nb_iterations)
 
         return kwargs_iter, nb_threads_pool

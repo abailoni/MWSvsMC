@@ -223,13 +223,13 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
 
     # TODO: allow all kinds of merges (not onyl local); skip connected components on the seeds
     # pred_segm_WS *= foreground_mask
-    # confidence_scores = GMIS_utils.get_confidence_scores(pred_segm_WS, affinities, offsets)
+    confidence_scores = GMIS_utils.get_confidence_scores(pred_segm_WS, affinities, offsets)
 
 
     # inner_path = "MEAN_bk_fixed"
-    # vigra.writeHDF5(pred_segm_WS[0].astype('uint16'), inst_out_file, inner_path)
-    # vigra.writeHDF5(confidence_scores, inst_out_conf_file, inner_path)
-    # vigra.writeHDF5(np.array([MC_energy['MC_energy']]), inst_out_conf_file, "MC_energy/" + inner_path)
+    vigra.writeHDF5(pred_segm_WS[0].astype('uint16'), inst_out_file, inner_path)
+    vigra.writeHDF5(confidence_scores, inst_out_conf_file, inner_path)
+    vigra.writeHDF5(np.array([MC_energy['MC_energy']]), inst_out_conf_file, "MC_energy/" + inner_path)
 
 
     # # # -------------------------------------------------
@@ -254,37 +254,37 @@ def get_segmentation(image_path, input_model_keys, agglo, local_attraction, save
 
 
 
-    for off_stride in [0,8,16,24,32,40]:
-        # affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
-        # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
-        # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
-        # if affs_repr.min() < 0:
-        #     affs_repr += np.abs(affs_repr.min())
-        # affs_repr /= affs_repr.max()
+    # for off_stride in [0,8,16,24,32,40]:
+    #     # affs_repr = GMIS_utils.get_affinities_representation(affinities[:off_stride+8], offsets[:off_stride+8])
+    #     # # affs_repr = GMIS_utils.get_affinities_representation(affinities[16:32], offsets[16:32])
+    #     # affs_repr = np.rollaxis(affs_repr, axis=0, start=4)[0]
+    #     # if affs_repr.min() < 0:
+    #     #     affs_repr += np.abs(affs_repr.min())
+    #     # affs_repr /= affs_repr.max()
+    #
+    #
+    #     fig, ax = plt.subplots(ncols=1, nrows=3, figsize=(7, 7))
+    #     for a in fig.get_axes():
+    #         a.axis('off')
+    #
+    #
+    #     # affs_repr = np.linalg.norm(affs_repr, axis=-1)
+    #     # ax.imshow(affs_repr, interpolation="none")
+    #
+    #     vis.plot_output_affin(ax[0], affinities, nb_offset=off_stride+3, z_slice=0)
+    #     vis.plot_output_affin(ax[1], affinities_orig, nb_offset=off_stride + 3, z_slice=0)
+    #     vis.plot_output_affin(ax[2], affinities_noAvg, nb_offset=off_stride + 3, z_slice=0)
+    #
+    #     pdf_path = image_path.replace(
+    #         '.input.h5', '.affs_{}.pdf'.format(off_stride))
+    #     # fig.savefig(pdf_path)
+    #     pdf_path = "./comparison_affs_{}_noAvg.pdf".format(off_stride)
+    #     vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
+    #     print(off_stride)
 
 
-        fig, ax = plt.subplots(ncols=1, nrows=3, figsize=(7, 7))
-        for a in fig.get_axes():
-            a.axis('off')
-
-
-        # affs_repr = np.linalg.norm(affs_repr, axis=-1)
-        # ax.imshow(affs_repr, interpolation="none")
-
-        vis.plot_output_affin(ax[0], affinities, nb_offset=off_stride+3, z_slice=0)
-        vis.plot_output_affin(ax[1], affinities_orig, nb_offset=off_stride + 3, z_slice=0)
-        vis.plot_output_affin(ax[2], affinities_noAvg, nb_offset=off_stride + 3, z_slice=0)
-
-        pdf_path = image_path.replace(
-            '.input.h5', '.affs_{}.pdf'.format(off_stride))
-        # fig.savefig(pdf_path)
-        pdf_path = "./comparison_affs_{}_noAvg.pdf".format(off_stride)
-        vis.save_plot(fig, os.path.dirname(pdf_path), os.path.basename(pdf_path))
-        print(off_stride)
-
-
-    print("Waiting...")
-    time.sleep(1000)
+    # print("Waiting...")
+    # time.sleep(1000)
 
     pbar.update(1)
 
@@ -359,8 +359,8 @@ if __name__ == '__main__':
                     # ["MutexWatershed", "thresh045", False],
                     # ["MutexWatershed", "thresh050", False],
                     # ["MutexWatershed", "thresh040", False],
-                    ["SingleLinkage", "thresh090", False],
-                    ["SingleLinkage", "thresh095", False],
+                    # ["SingleLinkage", "thresh090", False],
+                    # ["SingleLinkage", "thresh095", False],
                     # ["SingleLinkage", "thresh075", False],
                     # ["SingleLinkage", "thresh080", False],
                     # ["SingleLinkage", "thresh085", False],
@@ -377,6 +377,13 @@ if __name__ == '__main__':
                     # ["GAEC", "thresh065", False],
                     # ["GAEC", "thresh070", False],
                     # ["GAEC", "thresh075", False],
+                    ["GAEC_balanced", "thresh030", False],
+                    # ["GAEC_balanced", "thresh035", False],
+                    # ["GAEC_balanced", "thresh040", False],
+                    # ["GAEC_balanced", "thresh045", False],
+                    # ["GAEC_balanced", "thresh050", False],
+                    # ["GAEC_balanced", "thresh055", False],
+                    # ["GAEC_balanced", "thresh060", False],
                     # ["greedyFixation_noLogCosts", "thresh035", False],
                     # ["MEAN_constr", "thresh030", False],
                     # ["MEAN_constr", "thresh025", False],
@@ -414,7 +421,7 @@ if __name__ == '__main__':
     from itertools import repeat
     from multiprocessing import Lock
     l = Lock()
-    pool = ThreadPool(initializer=pool_initializer, initargs=(l,),  processes=1)
+    pool = ThreadPool(initializer=pool_initializer, initargs=(l,),  processes=6)
 
     from tqdm import tqdm
     #
